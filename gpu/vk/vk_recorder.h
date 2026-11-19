@@ -299,14 +299,19 @@ struct Arena {
     }
     ~Arena();
 };
-inline thread_local Arena t_arena;
+// Function-local ownership keeps the nontrivial TLS initializer with its use under COFF ThinLTO.
+// The arena's self-referential tail prevents constant initialization; its destructor still drains and frees it.
+inline Arena& t_arena() {
+    static thread_local Arena arena;
+    return arena;
+}
 
 /// The decoder: runs one packet's call with its copies
 inline void execute(const Packet* p) { p->run(p); }
 
 /// (DEFER) runs every held packet, in order, and empties the arena
 inline void drain() {
-    Arena& a = t_arena;
+    Arena& a = t_arena();
     const Packet* p = a.head;
     a.head = nullptr, a.tail = &a.head;
     while (p) {
@@ -778,7 +783,7 @@ template <class F>
 inline void fallback(const F& direct) {
     if (g_mode.load(std::memory_order_relaxed) == THREAD) settle(B_FALLBACK);
     else drain();
-    t_arena.fallbacks++;
+    t_arena().fallbacks++;
     direct();
 }
 
@@ -815,7 +820,7 @@ struct Enc {
             begin_thread();
             return;
         }
-        a = &t_arena;
+        a = &t_arena();
         if (md == DEFER) {
             if (par_active.load(std::memory_order_relaxed)) {
                 drain();

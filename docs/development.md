@@ -753,6 +753,51 @@ Each build also writes `sa/build/compile_commands.json`, every compile with its 
 clangd at that folder, or link the file to the checkout's top, which `.gitignore` leaves out). The lifted C is left out (about
 1.4 GB, which clangd's background index would read); the host's commands still name the lifted headers' folders.
 
+#### Windows COFF ThinLTO and thread-local state
+
+An inline namespace-scope `thread_local` can leave unresolved TLS initialization routines in an llvm-mingw COFF
+ThinLTO link. The profiler's POD state is explicitly zero-initialized with `inline constinit thread_local`; it needs
+no dynamic initializer. The recorder's `Arena` cannot use that fix: its `tail` initially points to its own `head`,
+and its destructor drains outstanding packets and frees its chunks. `rec::t_arena()` owns one function-local
+`thread_local Arena` per thread, shared by every translation unit on that thread, with the same exit cleanup.
+Keep all recorder callers using the accessor; do not replace it with a namespace-scope inline TLS object.
+
+The game-free regression compiles the production profiler scopes and recorder core, including the real `Packet`,
+`Enc`, boundary drain and destructor, into three translation units at `-O2`. It links and runs them first without LTO,
+then with `-flto=thin -fuse-ld=lld`. It checks cross-TU ownership of both TLS objects, zero initialization and thread
+separation, and packets encoded in separate TUs draining in order at a boundary and at thread exit. It requires native
+Clang with LLD/ThinLTO and a C++20 runtime, but no dump, Vulkan headers, GPU, profile or Python packages.
+It does not change production flags or add a PGO/LTO switch.
+
+From this checkout, in PowerShell on Windows, with the Builder's `tools.lock`-pinned llvm-mingw **20261104** and Python
+installed under `$tools`:
+
+```powershell
+$tools = 'C:\path\to\LongshotBuilder\tools'
+$python = Join-Path $tools 'python\python.exe'
+$cxx = Join-Path $tools 'llvm-mingw\bin\x86_64-w64-mingw32-clang++.exe'
+$env:PATH = "$(Join-Path $tools 'llvm-mingw\bin');$env:PATH"
+
+# Same harness and flags, reading the unmodified public base directly from git:
+& $python -I -B tests/test_thinlto_tls.py --cxx $cxx --source-ref 9e6f231d0ded199793e8270d20ec60cdb765d28f
+# Then the PR's working-tree sources:
+& $python -I -B tests/test_thinlto_tls.py --cxx $cxx
+
+# Existing real-consumer checks (CPM's Vulkan headers, no Vulkan library):
+$headers = Join-Path $tools 'cpm\vulkanheaders\v1.4.345\include'
+& $python -I -B tests/test_prof_sampling.py --cxx $cxx
+& $python -I -B tests/test_recorder_sync.py --cxx $cxx --headers $headers
+& $python -I -B tests/test_recorder_own_idle.py --cxx $cxx --headers $headers
+```
+
+Git must be on `PATH` and the named base commit available locally for `--source-ref`; it never changes the checkout.
+On the affected toolchain, the failure being reproduced is the base's ThinLTO **link** (undefined TLS initialization
+routine), after its non-LTO executable passed; the fixed sources must link and pass in both modes. Record the actual
+phase, diagnostic and exit codes for both commands. A source-extraction error, missing tool or passing base is not
+fail-before/pass-after evidence. The regression is discovered by `tests/run_all.py` through its compiler declaration;
+Linux can run the same test with native `clang++` and LLD, but an ELF pass does not demonstrate the Windows COFF fix.
+Link correctness is not an FPS claim; report any full renderer build or game run separately.
+
 #### The renderer's play profile
 
 The Vulkan back end is built with a play profile of its own (after
