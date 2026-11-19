@@ -5710,7 +5710,14 @@ int presents_ahead() {   // (RX_VK_PRESENTS_AHEAD=<n>: how many presents the gam
 int render_thread_mode() {
     static const int mode = [] {
         const char* e = getenv("RX_VK_ASYNC");
+#ifdef __PROSPERO__
+        // (PS5: the row never starts the render thread. Its buffer pools have no mirrors, so a replay behind the game reads
+        // memory the game has moved on from, and with it the console hung: there On is the recorder thread alone,
+        // vk_menu.cpp menu_threaded_rendering. RX_VK_ASYNC=1 still asks for it, for testing)
+        return e ? atoi(e) : 0;
+#else
         return e ? atoi(e) : menu_threaded_rendering() ? 1 : 0;
+#endif
     }();
     return mode;
 }

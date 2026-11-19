@@ -1228,6 +1228,13 @@ const char* threaded_env() {
 }
 /// (Auto's line says what Auto is: the CPU's rule with threaded::kAutoEnabled on, Off everywhere were it off)
 const char* hn_threaded(int v, int variant) {
+#ifdef __PROSPERO__   // (the console: On is the recorder thread alone, Auto is Off: menu_threaded_rendering)
+    static const char* const t[] = {
+        "The same as Off on the console.",
+        "The game's drawing commands go to the GPU's driver from a thread of their own, beside the game's: less of the "
+        "game's thread is spent on them. Still being tested on the console.",
+        "The picture is drawn on the game's own thread, as before."};
+#else
     static const char* const t[] = {
         threaded::kAutoEnabled
             ? "On where the processor has 12 or more threads for the game, and nothing rules it out; otherwise Off."
@@ -1235,6 +1242,7 @@ const char* hn_threaded(int v, int variant) {
         "The picture is drawn on threads of its own while the game goes on to its next frame. Still being tested: it "
         "can show flashes.",
         "The picture is drawn on the game's own thread, as before."};
+#endif
     if (variant == 1 || (variant < 0 && threaded_env())) {
         static char b[96];
         snprintf(b, sizeof b, "%s is set: it chooses for this run.", threaded_env() ? threaded_env() : "RX_VK_ASYNC or RX_VK_RECORDER");
@@ -5262,12 +5270,25 @@ bool menu_threaded_rendering() {
                              env_on("RX_VK_LOW_SPEC") ? "RX_VK_LOW_SPEC" : getenv("RX_VK_DUMP") ? "RX_VK_DUMP" :
                              getenv("RX_VK_BENCH") ? "RX_VK_BENCH" : nullptr;
         threaded::Choice c = threaded::choose(opts.threaded_rendering, cpus, unsafe != nullptr);
+#ifdef __PROSPERO__
+        // (PS5: Auto is Off. On is the player's choice and the recorder thread alone (vk_replay.cpp render_thread_mode): it
+        // took ~3 ms of the replay's ~23 a frame in Kokiri Forest on the Pro for ~0.7 of a core, the same frame rate there;
+        // untested by us on a base PS5, so not the default)
+        if (c.why == threaded::Why::AutoCpus || c.why == threaded::Why::AutoFewCpus) {
+            c = threaded::Choice{false, threaded::Why::AutoUnsafe};
+            unsafe = "the console: On is the recorder thread alone, still being tested";
+        }
+#endif
         if (c.why == threaded::Why::AutoCpus && !pools_mirrored()) {
             c = threaded::Choice{false, threaded::Why::AutoUnsafe};
             unsafe = "the buffer pools have no mirrors";
         }
         switch (c.why) {
+#ifdef __PROSPERO__
+        case threaded::Why::On: logf("vk: Threaded rendering: On (the recorder thread; the console has no render thread)"); break;
+#else
         case threaded::Why::On: logf("vk: Threaded rendering: On (the render thread and the recorder thread)"); break;
+#endif
         case threaded::Why::Off: logf("vk: Threaded rendering: Off"); break;
         case threaded::Why::AutoGate:
             logf("vk: Threaded rendering: Auto: off (Auto is turned off in this build; %u logical processors, its rule is on "

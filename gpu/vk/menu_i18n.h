@@ -505,6 +505,7 @@ inline constexpr Entry kpt_BR[] = {
     {"The game lowers it when the GPU is busy.", "O jogo a reduz quando a GPU está ocupada."},
     {"The game lowers it when the GPU is busy; the 3D is stretched from whatever size it draws.", "O jogo a reduz quando a GPU está ocupada; o 3D é esticado a partir do tamanho em que for desenhado."},
     {"The game runs at its own rate, and frames are made only for the display's refreshes it does not reach: the least input delay.", "O jogo roda no ritmo dele, e os quadros são gerados só para as atualizações da tela que ele não alcança: o menor atraso nos comandos."},
+    {"The game's drawing commands go to the GPU's driver from a thread of their own, beside the game's: less of the game's thread is spent on them. Still being tested on the console.", "Os comandos de desenho do jogo vão para o driver da GPU por uma thread própria, ao lado da do jogo: a thread do jogo gasta menos tempo com eles. Ainda em teste no console."},
     {"The game's original size.", "O tamanho original do jogo."},
     {"The game's own language, its text. Applies after a restart.", "O idioma do próprio jogo, os textos. Vale depois de reiniciar."},
     {"The game's own language, its text. Follow the console: the console's language, English (US) when the game does not have it. Applies after a restart.", "O idioma do próprio jogo, os textos. Seguir o console: o idioma do console, ou inglês (EUA) se o jogo não o tiver. Vale depois de reiniciar."},
@@ -525,6 +526,7 @@ inline constexpr Entry kpt_BR[] = {
     {"The renderer's own: made from the finished picture alone.", "A do próprio renderizador: feita só a partir da imagem final."},
     {"The report is copied. ", "O relatório foi copiado. "},
     {"The report is in the zip. ", "O relatório está no zip. "},
+    {"The same as Off on the console.", "O mesmo que Desligado no console."},
     {"The second-generation transformer as NVIDIA tuned it for Ultra Performance, the smallest Render resolutions.", "O transformer de segunda geração como a NVIDIA o ajustou para Ultra Desempenho, as menores Resoluções internas."},
     {"The share of the output the 3D is drawn at; the Upscaler fills in the rest.", "A fração da saída em que o 3D é desenhado; o Upscaler completa o resto."},
     {"The size of the sun's shadow maps: higher keeps the shadows of thin things near you, such as chains, fences and leaves, smooth instead of stair-stepped, for more video memory and a little GPU time. Applies at once.", "O tamanho dos mapas de sombra do sol: maior mantém lisas, em vez de serrilhadas, as sombras de coisas finas perto de você, como correntes, cercas e folhas, em troca de mais memória de vídeo e um pouco de tempo de GPU. Aplica-se na hora."},
@@ -7381,7 +7383,7 @@ inline constexpr Entry kzh_Hant[] = {
 };
 inline constexpr Lang kLangs[] = {
     {"en", "English", nullptr, 0},
-    {"pt-BR", "Português (Brasil)", kpt_BR, 571},
+    {"pt-BR", "Português (Brasil)", kpt_BR, 573},
     {"es-419", "Español (Latinoamérica)", kes_419, 565},
     {"es", "Español (España)", kes, 567},
     {"fr", "Français", kfr, 562},

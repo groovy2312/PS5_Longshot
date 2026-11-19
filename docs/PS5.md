@@ -152,6 +152,21 @@ GPL-3.0-or-later), which took them from the Eden emulator, which took them from
 in `gpu/vk/lsfg`. Each folder's `PROVENANCE.md` has the revisions and what was changed. Not built on Windows or Linux:
 `ps5/build.py` alone compiles them.
 
+## Threaded rendering
+
+On the console the Threaded rendering row's On is the recorder thread alone (`RX_VK_RECORDER=thread`): the replay's
+commands go to the driver from a thread of their own, while the replay itself stays on the game's thread. The row never
+starts the render thread there (`RX_VK_ASYNC=1` still does, for testing): the buffer pools have no mirrors on the
+console, so a replay behind the game reads memory the game has moved on from, and with it a base PS5 hung. Auto is Off.
+A change applies after a restart. `RX_VK_DESC_POOL_DIV` stays at the console's 8 and `RX_VK_RECORDER_OWN` stays off.
+
+Measured on the PS5 Pro (Kokiri Forest after loading the save, 1080p, MihawkGen 2x, two runs each, alternated, the
+recorder thread with `RX_VK_RECORDER_OWN=1` and `RX_VK_DESC_POOL_DIV=4`, as #40's report): the game at 34.7 to 35.1 fps
+either way; the replay's time a frame 22.6 and 23.4 ms without, 19.7 and 20.2 with; about 0.7 of a core more and about
+140 MiB less free memory (the most of that the descriptor pools' 4, not taken here); no faults or late frames. On a base
+PS5, #40 reports 21 to 22 fps going to 25 to 28 with those settings at 1920x1080 and 120 Hz. Not yet measured: the
+recorder thread alone with the console's defaults, and a base PS5 with this build.
+
 ## Open questions
 
 - **The foliage fault's cause.** `minStorageBufferOffsetAlignment` is 4 on the console; the culling pass that left one of the
