@@ -35,7 +35,7 @@ takes 540 MB more and the renderer past its own 2560 MB). Hyrule Castle Town, wh
 port kept a reserve for the game, has not been played at it: `RX_VK_TEX_MAX_DIM=512` is the old limit. At 3840x2160 a Pro plays the forest at about 40 frames a second shown with
 frame generation on (the owner's play, 2026-11-16; not measured from the log).
 
-The title is **PPSA99025, Longshot**, so PS5_Hookshot's PPSA99024 on a console is left alone.
+The title is **PPSA99198, Longshot**, so PS5_Hookshot's PPSA99024 on a console is left alone.
 
 ## Branches
 
@@ -99,7 +99,7 @@ compile of a lifted chunk about 1.4 GB. The compile took 40 minutes at 6 jobs.
 Install and run (the control payload `ps5vkctl` on the console, port 9111):
 
 ```
-PS5_HOST=<console address> python3 $PS5_VULKAN/tools/deploy-title-folder.py dist/PPSA99025
+PS5_HOST=<console address> python3 $PS5_VULKAN/tools/deploy-title-folder.py dist/PPSA99198
 PS5_HOST=<console address> python3 ps5/tools/run.py NAME --seconds 150      # klog in work/runs/NAME.klog
 ```
 

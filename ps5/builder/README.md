@@ -1,6 +1,6 @@
 # Longshot PS5 Builder
 
-A desktop tool: a player chooses their own game file and gets the PS5 title folder (`PPSA99025`) to copy to
+A desktop tool: a player chooses their own game file and gets the PS5 title folder (`PPSA99198`) to copy to
 `/data/homebrew` on the console. Nothing has to be installed: the package carries its own Python, compiler and kit.
 
 | File | What it is |

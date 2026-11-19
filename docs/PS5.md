@@ -1,7 +1,7 @@
 # Hookshot on the PS5
 
 This fork builds Hookshot (the static recompilation of *The Legend of Zelda: Ocarina of Time* for Nintendo Switch 2)
-as a native PS5 title, **PPSA99025**, on my homebrew stack: Mesa's RADV from
+as a native PS5 title, **PPSA99198**, on my homebrew stack: Mesa's RADV from
 [PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan) and the platform layer of my
 [PS5_PayloadSDK](https://github.com/mihawk-99/PS5_PayloadSDK) fork. Upstream is
 [NotRexed/Hookshot](https://github.com/NotRexed/Hookshot) (the `upstream` remote); everything else here is upstream's.
@@ -18,12 +18,12 @@ as a native PS5 title, **PPSA99025**, on my homebrew stack: Mesa's RADV from
 | Lift | The game's ARM64 code to C, from your `.nup`, as upstream does it | `nx2/nup.py --only exefs`, `nx2/lift.py --standalone --write` |
 | Compile | The lifted game, `host/` and `gpu/vk` for `x86_64-sie-ps5` (Zen 2) | `ps5/build.py` |
 | Link | One executable with RADV linked in, signed as the console's fake SELF | `ps5/tools/link.sh` (PS5_VulkanTemplate's link) |
-| Install | `dist/PPSA99025` to `/data/homebrew/PPSA99025`; `romfs/` is read in place from your `.nup` on the console (`HOS_PS5_NUP`, else `/data/lichii/roms/oot/oot.nup`, else `/data/prosperoeden/roms/oot/oot.nup`) | FTP, `host/ps5/nup_romfs.c` |
+| Install | `dist/PPSA99198` to `/data/homebrew/PPSA99198`; `romfs/` is read in place from your `.nup` on the console (`HOS_PS5_NUP`, else `/data/lichii/roms/oot/oot.nup`, else `/data/prosperoeden/roms/oot/oot.nup`) | FTP, `host/ps5/nup_romfs.c` |
 
 Players do all of it with the Longshot PS5 Builder, a desktop program for Linux and Windows that carries everything but
 the game (`ps5/builder/README.md`). For development, `ps5/builder/build_kit.sh` fetches PS5_Mesa, PS5_PayloadSDK and
 PS5_MihawkGen at the revisions the build was played with into `.local/`, builds RADV and the SDK once, and the title
-is `dist/PPSA99025`. By hand, with those in place, the steps are:
+is `dist/PPSA99198`. By hand, with those in place, the steps are:
 
 ```sh
 python3 -I nx2/nup.py <your game.nup> --only exefs --extract work/game
@@ -68,8 +68,9 @@ together.
 - [x] The runtime and the Vulkan back end compile for the console
 - [x] Link
 - [x] First boot on the Pro: title, menus and movies at 60 fps; play in Link's house and Kokiri Forest
-- [x] Foliage drawn every other frame only (2026-11-10): gone with storage buffers bound from multiples of 256; the cause is
-      not established, see "Open questions"
+- [x] Foliage drawn every other frame only (2026-11-10): gone in Kokiri Forest with storage buffers bound from multiples of
+      256, and in the Sacred Meadow with the page table of guest memory on the console's guest layout (2026-11-16); the
+      cause is under "Open questions"
 - [x] Frame generation: [PS5_MihawkGen](https://github.com/mihawk-99/PS5_MihawkGen) makes the frames between the game's (below)
 - [x] Stalls of 1.8 s in play: the test tools' own (below), none in a player's run
 - [ ] Frame rate in play: 33-40 fps in Kokiri Forest where the PC build is GPU-bound at 60 (shown at twice that with frame
@@ -169,12 +170,15 @@ recorder thread alone with the console's defaults, and a base PS5 with this buil
 
 ## Open questions
 
-- **The foliage fault's cause.** `minStorageBufferOffsetAlignment` is 4 on the console; the culling pass that left one of the
-  game's two list sets empty has its table bound at +0x9c0 of a page, and binding from multiples of 256 instead
-  (gpu/vk/vk_main.cpp) fills the list. `RX_VK_SSBO_ALIGN=64` does not, but 0x9c0 is a multiple of 64, so that binding is
-  unchanged. A test in PS5_Vulkan's own suite reads and writes storage and uniform buffers bound at these offsets correctly,
-  so this is not the driver's offset handling. The likely cause is what the program reads just below the table, which the PC
-  serves another way; not confirmed.
+- **The foliage fault's cause (answered 2026-11-16).** A program that follows a pointer no bound buffer holds reads it
+  through the page table of guest memory, whose two windows were the PC's: 8 GB from 0x1000000000 and 4 GB from
+  0x7f00000000 (spirv_emit_context.cpp `kGuestPages*`, gpu/vk/page_table_census.h `kPageWindows`). The console's guest
+  window is 64 GiB, with its heap from 0x400000000 (host/hos.h): no address of the game's was in either window, no page
+  was mapped and every followed pointer read 0, which left the culling pass's lists empty. Under `__PROSPERO__` the windows
+  are now 8 GB from 0x400000000 and 4 GB from 0xf00000000 (tests/test_ps5_page_windows.py). Binding from multiples of 256
+  (gpu/vk/vk_main.cpp) had taken the fault away in Kokiri Forest only: in the Sacred Meadow, with the camera on the crowns,
+  `RX_VK_FLASH` counted 400 flashes in 400 presents before the windows changed and 0 in about 2,000 after. Not retested:
+  the console's windows with the binding from multiples of 256 taken out.
 
 ## Driver and SDK gaps (PS5_Vulkan, PS5_PayloadSDK)
 

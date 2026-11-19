@@ -1,13 +1,14 @@
 """PS5: your game's romfs from its .nup straight to the title folder on the console, over the console's FTP server
 (no 26 GB copy on the PC first). Each file is read from the package as nx2/nup.py extracts it and sent as it is read.
 
-    python3 -I ps5/tools/upload-romfs.py <your game.nup> [--host 192.168.x.y] [--port 2121] [--to /data/homebrew/PPSA99025/romfs]
+    python3 -I ps5/tools/upload-romfs.py <your game.nup> [--host 192.168.x.y] [--port 2121] [--to /data/homebrew/PPSA99198/romfs]
 
-Resumable: what was sent is listed in .local/romfs-uploaded.txt and skipped next time. Three connections: the console's
+Resumable: .local/romfs-uploaded-*.txt records what was sent to each FTP destination. Three connections: the console's
 FTP server writes about 7 MiB/s a connection and 22 MiB/s in all (PS5_PayloadSDK platform/docs/PROBE.md).
 """
 import argparse
 import ftplib
+import hashlib
 import io
 import os
 import queue
@@ -18,9 +19,6 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "nx2"))
 import nup as nupmod  # noqa: E402
-
-DONE = os.path.join(ROOT, ".local", "romfs-uploaded.txt")
-
 
 def connect(host, port):
     f = ftplib.FTP()
@@ -35,7 +33,7 @@ def main():
     ap.add_argument("nup")
     ap.add_argument("--host", default=os.environ.get("PS5_HOST"))
     ap.add_argument("--port", type=int, default=2121)
-    ap.add_argument("--to", default="/data/homebrew/PPSA99025/romfs")
+    ap.add_argument("--to", default="/data/homebrew/PPSA99198/romfs")
     ap.add_argument("--connections", type=int, default=3)
     a = ap.parse_args()
     if not a.host:
@@ -45,8 +43,11 @@ def main():
     files = [(rel, r) for rel, r in pkg.walk(t["romfs"])]
     for rel, _ in files:
         nupmod.extraction_path("/nonexistent-check", "romfs", rel)   # (the same path checks as an extraction)
-    os.makedirs(os.path.dirname(DONE), exist_ok=True)
-    done = set(open(DONE, encoding="utf-8").read().split("\n")) if os.path.exists(DONE) else set()
+    destination = f"{a.host}:{a.port}/{a.to.strip('/')}"
+    destination_key = hashlib.sha256(destination.encode("utf-8")).hexdigest()
+    progress_path = os.path.join(ROOT, ".local", f"romfs-uploaded-{destination_key}.txt")
+    os.makedirs(os.path.dirname(progress_path), exist_ok=True)
+    done = set(open(progress_path, encoding="utf-8").read().splitlines()) if os.path.exists(progress_path) else set()
     todo = [(rel, r) for rel, r in files if rel not in done]
     total = sum(r[2] for _, r in todo)
     print("romfs: %d files, %d to send (%.2f GB) to %s:%s" % (len(files), len(todo), total / 1e9, a.host, a.to), flush=True)
@@ -57,7 +58,7 @@ def main():
     sent = [0, 0]
     made = set()
     errors = []
-    log = open(DONE, "a", encoding="utf-8")
+    log = open(progress_path, "a", encoding="utf-8")
     t0 = time.time()
 
     def mkdirs(f, path):

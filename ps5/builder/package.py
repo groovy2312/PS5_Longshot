@@ -57,7 +57,7 @@ Builds the PlayStation 5 title folder of Longshot from your own copy of the game
 1. Start %(start)s.
 2. Choose your game file (.nup), the folder to build into and your console (PS5 / PS5 Slim, or PS5 Pro), then Build.
    The build takes 40 to 70 minutes and wants about 10 GB of free memory and 6 GB of disk.
-3. Copy the folder it makes (PPSA99025) to /data/homebrew on the console, or send it from the window over FTP.
+3. Copy the folder it makes (PPSA99198) to /data/homebrew on the console, or send it from the window over FTP.
    Your game file goes to /data/eglantineps5/roms on the console.
 
 The folder it makes comes from your game: never share it. This builder holds no game files.

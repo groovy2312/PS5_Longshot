@@ -1,4 +1,4 @@
-"""PS5: the game, the runtime and the Vulkan back end compiled for the console and linked into one title, dist/PPSA99025.
+"""PS5: the game, the runtime and the Vulkan back end compiled for the console and linked into dist/<titleId>.
 
     python3 -I ps5/build.py [--jobs N] [--compile-only]
 
@@ -284,8 +284,11 @@ def main():
     linked = subprocess.run(["bash", os.path.join(ROOT, "ps5", "tools", "link.sh"), OUT,
                              os.path.join(kit.WORK, "sa", "image", "image.bin")], env=env).returncode
     if not linked and HAS_MIHAWKGEN:   # (the network beside the game: /app0/framegen/network.fgw, vk_framegen.cpp)
-        os.makedirs(os.path.join(ROOT, "dist", "PPSA99025", "framegen"), exist_ok=True)
-        shutil.copy(MIHAWKGEN_NETWORK, os.path.join(ROOT, "dist", "PPSA99025", "framegen", "network.fgw"))
+        with open(os.path.join(ROOT, "ps5", "sce_sys", "param.json"), encoding="utf-8") as f:
+            title_id = json.load(f)["titleId"]
+        framegen_dir = os.path.join(ROOT, "dist", title_id, "framegen")
+        os.makedirs(framegen_dir, exist_ok=True)
+        shutil.copy(MIHAWKGEN_NETWORK, os.path.join(framegen_dir, "network.fgw"))
         rev = subprocess.run(["git", "-C", MIHAWKGEN, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
         print("ps5: frame generation by PS5_MihawkGen (%s)" % (rev or "no revision"), flush=True)
     return linked

@@ -4,7 +4,7 @@
 """
 import ftplib, io, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REMOTE = "/data/homebrew/PPSA99025/user/save"
+REMOTE = "/data/homebrew/PPSA99198/user/save"
 cmd = sys.argv[1]
 local = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "work", "save-backup")
 f = ftplib.FTP(); f.connect(os.environ.get("PS5_HOST", "192.168.50.115"), 2121, timeout=30); f.login(); f.voidcmd("TYPE I")

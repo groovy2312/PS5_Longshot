@@ -132,13 +132,13 @@ The builder carries its own compiler, Python and the ready-built parts of the ti
 5. Press **Build**. The window shows the five steps and, under Show details, the log. Stop keeps what is done: the
    next Build goes on from there.
 
-When it ends you have a folder named **`PPSA99025`** in the folder you chose. It is made from your game: **never
+When it ends you have a folder named **`PPSA99198`** in the folder you chose. It is made from your game: **never
 share it.**
 
 ### Put it on the console
 
-1. Copy the whole **`PPSA99025`** folder to **`/data/homebrew/`** on the console, so that it is
-   `/data/homebrew/PPSA99025`. Either type the console's address in the builder and press **Send to PS5**, or copy it
+1. Copy the whole **`PPSA99198`** folder to **`/data/homebrew/`** on the console, so that it is
+   `/data/homebrew/PPSA99198`. Either type the console's address in the builder and press **Send to PS5**, or copy it
    with any FTP program.
 2. Copy your game file to the console as **`/data/eglantineps5/roms/oot.nup`** (make the folders if they are not
    there). It is 25 GB: this is the long copy. A file already there for another program, under
@@ -174,12 +174,12 @@ Follow the console to go back. It applies after a restart, which the menu offers
 
 ### Updating
 
-Download the new builder, build again and copy the new `PPSA99025` folder over the one on the console. Your saves
-and settings are in that folder on the console and are not in the one you copy: they stay.
+To update an existing `PPSA99198` installation, rebuild with the new builder and copy the resulting folder over
+the one on the console. This keeps your saves and settings.
 
 ### Where the files go
 
-On the console, everything of Longshot's is in `/data/homebrew/PPSA99025`:
+On the console, everything of Longshot's is in `/data/homebrew/PPSA99198`:
 
 | | |
 |---|---|
@@ -191,7 +191,7 @@ On the console, everything of Longshot's is in `/data/homebrew/PPSA99025`:
 | `cache/`, `radv-shader-cache/` | Shaders made as you play. Safe to delete: they are made again. |
 | `logs/`, `bug-reports/` | What the title wrote about its runs. |
 
-On your computer, the folder you built into holds `PPSA99025` and `longshot-ps5-work`, the build's own files (about
+On your computer, the folder you built into holds `PPSA99198` and `longshot-ps5-work`, the build's own files (about
 3 GB). Keep the second one and the next build is short; delete it and nothing is lost but time.
 
 ### What it connects to
@@ -208,7 +208,7 @@ network. The title on the console does not look for updates.
   `--appimage-extract-and-run`.
 - **Windows shows a warning when the builder starts:** it is not code-signed.
 - **Send to PS5 fails:** the console has to be on, with its FTP server running, at that address and port.
-- **Longshot is not on the home screen:** the folder has to be `/data/homebrew/PPSA99025` itself, with `eboot.bin`
+- **Longshot is not on the home screen:** the folder has to be `/data/homebrew/PPSA99198` itself, with `eboot.bin`
   directly inside it, and your homebrew environment has to list titles from there.
 - **The title does not reach the game's logos:** check the game file's name and place in "Put it on the console"
   first. What happens without the file was not tried.

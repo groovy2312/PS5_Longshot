@@ -2,7 +2,7 @@
 
     python3 ps5/tools/run.py NAME [--seconds 120] [--env 'KEY=VALUE' ...] [--deploy]
 
---deploy uploads what changed in dist/PPSA99025 first. The run's switches go to /app0/hookshot_test_env.txt, which the
+--deploy uploads what changed in dist/PPSA99198 first. The run's switches go to /app0/hookshot_test_env.txt, which the
 title reads in place of a player's hookshot_env.txt and with none of its limits (host/hos_main.c), and which is taken
 away when the run ends: a player's start never sees a test's input script. PS5_Vulkan's run tool launches the title and
 captures klog; after --seconds this puts /app0/quit-run.txt in the title folder, and the title leaves through the shell
@@ -25,7 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 VULKAN = os.environ.get("PS5_VULKAN", os.path.join(ROOT, "..", "PS5_Vulkan"))
 os.environ.setdefault("PS5_HOST", "192.168.50.115")
 sys.path.insert(0, os.path.join(VULKAN, "tools"))
-TITLE = "PPSA99025"
+TITLE = "PPSA99198"
 APP = "/data/homebrew/" + TITLE
 
 

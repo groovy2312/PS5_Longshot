@@ -10,7 +10,7 @@ import os
 import sys
 
 HOST = os.environ.get("PS5_HOST", "192.168.50.115")
-APP = "/data/homebrew/PPSA99025"
+APP = "/data/homebrew/PPSA99198"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
