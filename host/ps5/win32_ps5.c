@@ -1268,7 +1268,7 @@ static void *memory_floor_watch(void *unused) {
             hang_logged = 1;
             ps5_write_crash_trace("GPU_FREEZE_2S", room >> 20);
         }
-        if (room < floor + (3200ull << 20)) {
+        if (room < floor + (1400ull << 20)) {
             zone_boost_trigger();
         }
         if (room < floor) {
@@ -1306,7 +1306,7 @@ static void *memory_floor_watch(void *unused) {
             }
             hos_ps5_exit(3);
         }
-        sceKernelUsleep(room < floor + (3400ull << 20) ? 15000 : 150000);
+        sceKernelUsleep(room < floor + (1600ull << 20) ? 15000 : 150000);
     }
     return NULL;
 }
