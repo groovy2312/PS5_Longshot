@@ -13,7 +13,7 @@ static inline uint64_t zone_now_ms(void) {
     return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
 }
 
-extern volatile uint64_t g_zone_boost_until_ms;
+__attribute__((weak)) volatile uint64_t g_zone_boost_until_ms = 0;
 
 static inline void zone_boost_trigger(void) {
     const char *sec_env = getenv("RX_VK_ZONE_BOOST_SEC");
