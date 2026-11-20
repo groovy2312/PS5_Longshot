@@ -130,14 +130,14 @@ what does not yet. Open problems are collected in tracking issues, linked below.
 ## Install and play
 
 Longshot for the PS5 does not come ready to play. The title is built **on your computer, from your own copy of the
-game**, by the **Longshot PS5 Builder**, then copied to the console.
+game**, by the **PS5 Longshot Plus Builder**, then copied to the console.
 
 ### [Download the Longshot PS5 Builder](https://github.com/heydemoura/PS5_Longshot/releases/latest)
 
 | Your computer | File |
 |---|---|
-| Linux | `LongshotPS5Builder-<version>-x86_64.AppImage` |
-| Windows | `LongshotPS5Builder-<version>-windows-x64.zip` (a portable folder: no installer) |
+| Linux | `PS5LongshotPlusBuilder-<version>-x86_64.AppImage` |
+| Windows | `PS5LongshotPlusBuilder-<version>-windows-x64.zip` (a portable folder: no installer) |
 
 Each file has a `.sha256` beside it. There is no macOS builder, and no PC version of the game here.
 
@@ -166,8 +166,8 @@ The builder carries its own compiler, Python and the ready-built parts of the ti
 ### Build the title
 
 1. **Start the builder.**
-   - Linux: make the AppImage executable (`chmod +x LongshotPS5Builder-*.AppImage`) and start it.
-   - Windows: unpack the zip anywhere, open the `LongshotPS5Builder` folder and start `LongshotPS5Builder.exe`.
+   - Linux: make the AppImage executable (`chmod +x PS5LongshotPlusBuilder-*.AppImage`) and start it.
+   - Windows: unpack the zip anywhere, open the `LongshotPS5Builder` folder and start `PS5LongshotPlusBuilder.exe`.
      Keep the folder whole: the program needs what is beside it.
 2. **Game file:** choose your `.nup`.
 3. **Build into:** choose a folder on your computer.
@@ -260,7 +260,7 @@ network. The title on the console does not look for updates.
 - **The title does not reach the game's logos:** check the game file's name and place in "Put it on the console"
   first. What happens without the file was not tried.
 - **Without the window:** `--cli --game <file> --out <folder> --model base|pro` after the AppImage's name, or after
-  `LongshotPS5Builder.exe`. `--cli --check` checks the builder's own parts.
+  `PS5LongshotPlusBuilder.exe`. `--cli --check` checks the builder's own parts.
 
 ## In-game menu
 

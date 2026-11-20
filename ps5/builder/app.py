@@ -169,7 +169,7 @@ class Window(QWidget):
         self.game.setPlaceholderText("Your game file (.nup)")
         game_pick = QPushButton("Choose…")
         game_pick.clicked.connect(self.pick_game)
-        self.out = QLineEdit(self.settings.value("out", os.path.join(os.path.expanduser("~"), "Longshot-PS5")))
+        self.out = QLineEdit(self.settings.value("out", os.path.join(os.path.expanduser("~"), "PS5-Longshot-Plus")))
         out_pick = QPushButton("Choose…")
         out_pick.clicked.connect(self.pick_out)
         form = QFormLayout()
@@ -417,7 +417,7 @@ class Window(QWidget):
             QMessageBox.warning(self, "Not sent", "The folder was not sent to the console.\n\n%s\n\nIs the console on, with its "
                                 "FTP server running, at this address and port?" % error)
         else:
-            self.status.setText("Sent: %s is in /data/homebrew on the console. Start Longshot from its home screen." %
+            self.status.setText("Sent: %s is in /data/homebrew on the console. Start PS5 Longshot Plus from its home screen." %
                                 os.path.basename(self.built))
 
     def closeEvent(self, e):

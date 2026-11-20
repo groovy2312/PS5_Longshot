@@ -52,7 +52,7 @@ NATIVE_SOURCES = ("native_app_builder.cpp", "self_container.cpp", "elf_object.cp
 ZLIB_SOURCES = ("adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", "zutil.c", "trees.c", "deflate.c", "compress.c", "uncompr.c")
 README = """PS5 Longshot Plus Builder %(version)s
 
-Builds the PlayStation 5 title folder of Longshot from your own copy of the game.
+Builds the PlayStation 5 title folder of PS5 Longshot Plus from your own copy of the game.
 
 1. Start %(start)s.
 2. Choose your game file (.nup), the folder to build into and your console (PS5 / PS5 Slim, or PS5 Pro), then Build.
@@ -254,7 +254,7 @@ def appimage(top, ver, a):
         f.write('#!/bin/sh\nexec "$(dirname -- "$(readlink -f -- "$0")")/usr/PS5LongshotPlusBuilder/ps5-longshot-plus-builder" "$@"\n')
     os.chmod(os.path.join(appdir, "AppRun"), 0o755)
     with open(os.path.join(appdir, "ps5-longshot-plus-builder.desktop"), "w") as f:
-        f.write("[Desktop Entry]\nType=Application\nName=PS5 Longshot Plus Builder\nComment=Builds the PS5 title folder of Longshot from "
+        f.write("[Desktop Entry]\nType=Application\nName=PS5 Longshot Plus Builder\nComment=Builds the PS5 title folder of PS5 Longshot Plus from "
                 "your own copy of the game\nExec=ps5-longshot-plus-builder\nIcon=ps5-longshot-plus-builder\nCategories=Game;Utility;\nTerminal=false\n")
     shutil.copy2(os.path.join(ROOT, "ps5", "sce_sys", "icon0.png"), os.path.join(appdir, "ps5-longshot-plus-builder.png"))
     shutil.copy2(os.path.join(appdir, "ps5-longshot-plus-builder.png"), os.path.join(appdir, ".DirIcon"))
