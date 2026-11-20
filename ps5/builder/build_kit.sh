@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Longshot PS5 Builder: the kit, from a fresh clone on Linux, with no game.
+# PS5 Longshot Plus Builder: the kit, from a fresh clone on Linux, with no game.
 #
 #   bash ps5/builder/build_kit.sh [--jobs N] [--out dist/kit]
 #   bash ps5/builder/build_kit.sh --packages            the apt packages it needs

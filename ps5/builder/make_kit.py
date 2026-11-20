@@ -1,4 +1,4 @@
-"""The Longshot PS5 Builder's kit: everything of the title that is not made from the game, ready built.
+"""The PS5 Longshot Plus Builder's kit: everything of the title that is not made from the game, ready built.
 
     PS5_VULKAN=<built PS5_Vulkan> PS5_MIHAWKGEN=<PS5_MihawkGen> python3 -I ps5/builder/make_kit.py [--out dist/kit]
 

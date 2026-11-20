@@ -1,4 +1,4 @@
-# Longshot PS5 Builder
+# PS5 Longshot Plus Builder
 
 A desktop tool: a player chooses their own game file and gets the PS5 title folder (`PPSA99198`) to copy to
 `/data/homebrew` on the console. Nothing has to be installed: the package carries its own Python, compiler and kit.
@@ -10,12 +10,12 @@ A desktop tool: a player chooses their own game file and gets the PS5 title fold
 | `pipeline.py` | The build: the game's program read out of the `.nup`, translated to C, compiled, linked with the kit, signed, laid out. Python only, the same on every system. `--game --out --model base|pro [--jobs]`; `--check` checks the builder's own parts with no game. |
 | `app.py` | The window (PyQt6): game file, output folder, the console's model, Build, the five steps, a progress bar, the log, Stop, and Send to PS5 over FTP. Runs `pipeline.py` as a process. `--self-test` opens it and runs the check. |
 | `package.py` | The packages, both made on Linux: `--system linux-x64` an AppImage, `--system windows-x64` a portable folder in a zip (cross-built). python-build-standalone, llvm-mingw's LLVM (its clang has the PS5 target), `ps5-native-tool` and the lifter's helper library for the system, the kit. Every download is checked by SHA-256. |
-| `launcher.c` | Windows: `LongshotPS5Builder.exe`, the portable folder's start. No installer. |
+| `launcher.c` | Windows: `PS5LongshotPlusBuilder.exe`, the portable folder's start. No installer. |
 
 ```
 bash ps5/builder/build_kit.sh                                  # the kit (30 to 60 minutes the first time)
-python3 -I ps5/builder/package.py --system linux-x64           # dist/builder/LongshotPS5Builder-<version>-x86_64.AppImage
-python3 -I ps5/builder/package.py --system windows-x64         # dist/builder/LongshotPS5Builder-<version>-windows-x64.zip
+python3 -I ps5/builder/package.py --system linux-x64           # dist/builder/PS5LongshotPlusBuilder-<version>-x86_64.AppImage
+python3 -I ps5/builder/package.py --system windows-x64         # dist/builder/PS5LongshotPlusBuilder-<version>-windows-x64.zip
 ```
 
 ## Releases
@@ -24,14 +24,14 @@ python3 -I ps5/builder/package.py --system windows-x64         # dist/builder/Lo
 (ubuntu-24.04), makes both packages (ubuntu-22.04), starts each on its own system (`--check` and the window's
 `--self-test` on ubuntu-22.04 and windows-latest), and only then attaches the four files to the release:
 
-    LongshotPS5Builder-<tag>-x86_64.AppImage        (+ .sha256)
-    LongshotPS5Builder-<tag>-windows-x64.zip        (+ .sha256)
+    PS5LongshotPlusBuilder-<tag>-x86_64.AppImage        (+ .sha256)
+    PS5LongshotPlusBuilder-<tag>-windows-x64.zip        (+ .sha256)
 
 To cut one: `gh release create ps5-v0.1.0 --title "..." --notes "..."` (or the Releases page). The tag names the
 files. "Run workflow" on the Actions page does everything but the upload and keeps the packages as the run's
 artifacts: a rehearsal. No game file is used anywhere in it.
 
-The Windows package is a folder: unpack the zip anywhere and start `LongshotPS5Builder.exe`. It is not one file: the
+The Windows package is a folder: unpack the zip anywhere and start `PS5LongshotPlusBuilder.exe`. It is not one file: the
 compiler, Python and the kit are 880 MB unpacked, and a single self-unpacking program would unpack them at every start.
 
 ## The console's profile

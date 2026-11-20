@@ -1,4 +1,4 @@
-/* Longshot PS5 Builder, Windows: LongshotPS5Builder.exe, the window's start.
+/* PS5 Longshot Plus Builder, Windows: PS5LongshotPlusBuilder.exe, the window's start.
 
    The portable folder's own program: it starts python\pythonw.exe on app\app.py, both beside it, and ends. No console,
    no installer, nothing written outside the folder but the window's saved choices. "--cli ..." runs the build without
@@ -25,8 +25,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR args, int show) {
     STARTUPINFOW si = {sizeof si};
     PROCESS_INFORMATION pi;
     if (!CreateProcessW(NULL, cmd, NULL, NULL, cli, 0, NULL, here, &si, &pi)) {
-        MessageBoxW(NULL, L"The builder's own Python did not start. Unpack the whole LongshotPS5Builder folder and start "
-                    L"LongshotPS5Builder.exe from inside it.", L"Longshot PS5 Builder", MB_ICONERROR);
+        MessageBoxW(NULL, L"The builder's own Python did not start. Unpack the whole PS5LongshotPlusBuilder folder and start "
+                    L"PS5LongshotPlusBuilder.exe from inside it.", L"PS5 Longshot Plus Builder", MB_ICONERROR);
         return 2;
     }
     DWORD code = 0;

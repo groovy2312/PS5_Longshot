@@ -1,13 +1,13 @@
-"""Longshot PS5 Builder, packaged for players: nothing to install, its own Python, compiler and kit inside.
+"""PS5 Longshot Plus Builder, packaged for players: nothing to install, its own Python, compiler and kit inside.
 
-    python3 -I ps5/builder/package.py --system linux-x64     dist/builder/LongshotPS5Builder-<version>-x86_64.AppImage
-    python3 -I ps5/builder/package.py --system windows-x64   dist/builder/LongshotPS5Builder-<version>-windows-x64.zip
+    python3 -I ps5/builder/package.py --system linux-x64     dist/builder/PS5LongshotPlusBuilder-<version>-x86_64.AppImage
+    python3 -I ps5/builder/package.py --system windows-x64   dist/builder/PS5LongshotPlusBuilder-<version>-windows-x64.zip
 
 Both are made on Linux (the Windows one is cross-built: no Windows PC is needed), from the kit (--kit, ps5/builder/
 make_kit.py or build_kit.sh) and the PS5_Vulkan submodule's sources. What goes in:
 
-    LongshotPS5Builder/
-      LongshotPS5Builder.exe | longshot-ps5-builder    the start (Windows: launcher.c; Linux: a shell script, the AppImage's AppRun)
+    PS5LongshotPlusBuilder/
+      PS5LongshotPlusBuilder.exe | ps5-longshot-plus-builder    the start (Windows: launcher.c; Linux: a shell script, the AppImage's AppRun)
       app/                      the window and the build (app.py, pipeline.py)
       python/                   CPython (python-build-standalone) with PyQt6 and what the lifter imports
       tools/                    clang, ld.lld and llvm-nm (llvm-mingw's LLVM, whose clang has the PS5's target), ps5-native-tool
@@ -50,7 +50,7 @@ LLVM_KEEP = {
 }
 NATIVE_SOURCES = ("native_app_builder.cpp", "self_container.cpp", "elf_object.cpp", "sce_module_writer.cpp")
 ZLIB_SOURCES = ("adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", "zutil.c", "trees.c", "deflate.c", "compress.c", "uncompr.c")
-README = """Longshot PS5 Builder %(version)s
+README = """PS5 Longshot Plus Builder %(version)s
 
 Builds the PlayStation 5 title folder of Longshot from your own copy of the game.
 
@@ -172,13 +172,13 @@ def native_parts(system, vulkan, cache, top, kit):
     for f in ("LICENSE", "PROVENANCE.md"):
         shutil.copy2(os.path.join(zbic_src, f), os.path.join(zbic_dir, f))
     if system == "windows-x64":
-        run([cc, "-O2", "-municode", "-mwindows", "-static", os.path.join(HERE, "launcher.c"), "-o", os.path.join(top, "LongshotPS5Builder.exe")])
+        run([cc, "-O2", "-municode", "-mwindows", "-static", os.path.join(HERE, "launcher.c"), "-o", os.path.join(top, "PS5LongshotPlusBuilder.exe")])
 
 
 def stage(system, a):
     """the folder: top"""
     linux = system == "linux-x64"
-    top = os.path.join(a.out, system, "LongshotPS5Builder")
+    top = os.path.join(a.out, system, "PS5LongshotPlusBuilder")
     shutil.rmtree(top, ignore_errors=True)
     os.makedirs(top)
     vulkan = os.environ.get("PS5_VULKAN") or os.path.join(ROOT, "ps5", "deps", "PS5_Vulkan")
@@ -232,35 +232,35 @@ def stage(system, a):
     ver = version()
     open(os.path.join(top, "VERSION"), "w").write(ver + "\n")
     if linux:
-        launcher = os.path.join(top, "longshot-ps5-builder")
+        launcher = os.path.join(top, "ps5-longshot-plus-builder")
         with open(launcher, "w") as f:
-            f.write('#!/bin/sh\n# Longshot PS5 Builder: the window. "--cli ..." runs the build without it (app/pipeline.py\'s options).\n'
+            f.write('#!/bin/sh\n# PS5 Longshot Plus Builder: the window. "--cli ..." runs the build without it (app/pipeline.py\'s options).\n'
                     'here=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")" && pwd)\n'
                     'export PYTHONDONTWRITEBYTECODE=1\n'
                     'if [ "${1:-}" = "--cli" ]; then shift; exec "$here/python/bin/python3" -I -u "$here/app/pipeline.py" "$@"; fi\n'
                     'exec "$here/python/bin/python3" -I "$here/app/app.py" "$@"\n')
         os.chmod(launcher, os.stat(launcher).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     with open(os.path.join(top, "README.txt"), "w", newline="\r\n" if not linux else "\n") as f:
-        f.write(README % {"version": ver, "start": "the AppImage" if linux else "LongshotPS5Builder.exe"})
+        f.write(README % {"version": ver, "start": "the AppImage" if linux else "PS5LongshotPlusBuilder.exe"})
     return top, ver
 
 
 def appimage(top, ver, a):
-    appdir = os.path.join(a.out, "linux-x64", "LongshotPS5Builder.AppDir")
+    appdir = os.path.join(a.out, "linux-x64", "PS5LongshotPlusBuilder.AppDir")
     shutil.rmtree(appdir, ignore_errors=True)
     os.makedirs(os.path.join(appdir, "usr"))
-    os.replace(top, os.path.join(appdir, "usr", "LongshotPS5Builder"))
+    os.replace(top, os.path.join(appdir, "usr", "PS5LongshotPlusBuilder"))
     with open(os.path.join(appdir, "AppRun"), "w") as f:
-        f.write('#!/bin/sh\nexec "$(dirname -- "$(readlink -f -- "$0")")/usr/LongshotPS5Builder/longshot-ps5-builder" "$@"\n')
+        f.write('#!/bin/sh\nexec "$(dirname -- "$(readlink -f -- "$0")")/usr/PS5LongshotPlusBuilder/ps5-longshot-plus-builder" "$@"\n')
     os.chmod(os.path.join(appdir, "AppRun"), 0o755)
-    with open(os.path.join(appdir, "longshot-ps5-builder.desktop"), "w") as f:
-        f.write("[Desktop Entry]\nType=Application\nName=Longshot PS5 Builder\nComment=Builds the PS5 title folder of Longshot from "
-                "your own copy of the game\nExec=longshot-ps5-builder\nIcon=longshot-ps5-builder\nCategories=Game;Utility;\nTerminal=false\n")
-    shutil.copy2(os.path.join(ROOT, "ps5", "sce_sys", "icon0.png"), os.path.join(appdir, "longshot-ps5-builder.png"))
-    shutil.copy2(os.path.join(appdir, "longshot-ps5-builder.png"), os.path.join(appdir, ".DirIcon"))
+    with open(os.path.join(appdir, "ps5-longshot-plus-builder.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=PS5 Longshot Plus Builder\nComment=Builds the PS5 title folder of Longshot from "
+                "your own copy of the game\nExec=ps5-longshot-plus-builder\nIcon=ps5-longshot-plus-builder\nCategories=Game;Utility;\nTerminal=false\n")
+    shutil.copy2(os.path.join(ROOT, "ps5", "sce_sys", "icon0.png"), os.path.join(appdir, "ps5-longshot-plus-builder.png"))
+    shutil.copy2(os.path.join(appdir, "ps5-longshot-plus-builder.png"), os.path.join(appdir, ".DirIcon"))
     tool = fetch("appimagetool", a.cache)
     os.chmod(tool, 0o755)
-    out = os.path.join(a.out, "LongshotPS5Builder-%s-x86_64.AppImage" % ver)
+    out = os.path.join(a.out, "PS5LongshotPlusBuilder-%s-x86_64.AppImage" % ver)
     # (--appimage-extract-and-run: no FUSE in a build container)
     run([tool, "--appimage-extract-and-run", "--no-appstream", appdir, out], env=dict(os.environ, ARCH="x86_64", VERSION=ver))
     return out
@@ -272,7 +272,7 @@ def main():
     ap.add_argument("--kit", default=os.path.join(ROOT, "dist", "kit"))
     ap.add_argument("--out", default=os.path.join(ROOT, "dist", "builder"))
     ap.add_argument("--cache", default=os.path.join(ROOT, ".local", "builder-downloads"))
-    ap.add_argument("--folder-only", action="store_true", help="stop at the folder (dist/builder/<system>/LongshotPS5Builder)")
+    ap.add_argument("--folder-only", action="store_true", help="stop at the folder (dist/builder/<system>/PS5LongshotPlusBuilder)")
     a = ap.parse_args()
     a.out, a.cache, a.kit = (os.path.abspath(p) for p in (a.out, a.cache, a.kit))
     if not os.path.exists(os.path.join(a.kit, "kit.json")):
@@ -285,7 +285,7 @@ def main():
     if a.system == "linux-x64":
         out = appimage(top, ver, a)
     else:
-        out = os.path.join(a.out, "LongshotPS5Builder-%s-windows-x64.zip" % ver)
+        out = os.path.join(a.out, "PS5LongshotPlusBuilder-%s-windows-x64.zip" % ver)
         if os.path.exists(out):
             os.remove(out)
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:

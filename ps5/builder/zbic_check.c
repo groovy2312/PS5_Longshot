@@ -1,4 +1,4 @@
-/* Longshot PS5 Builder: zbic_selftest, built into the ZBIC library each package carries (ps5/builder/package.py).
+/* PS5 Longshot Plus Builder: zbic_selftest, built into the ZBIC library each package carries (ps5/builder/package.py).
 
    The library unpacks the game's main program (nx2/zbic.py). v0.1.1's and v0.1.2's Linux library, compiled by GCC 11 on
    the release's runner, wrote ZBIC frames well and read none: "ZBIC: decompression failed (-2 of 63201744 bytes)" at a

@@ -1,4 +1,4 @@
-# Longshot PS5 Builder: the AppImage (Linux) and the portable Windows folder, built and attached to a release when one is
+# PS5 Longshot Plus Builder: the AppImage (Linux) and the portable Windows folder, built and attached to a release when one is
 # published. Nothing here has or makes game content: the kit is what the title is made of besides the game, and players
 # add their own game on their own PC.
 #
@@ -145,15 +145,15 @@ jobs:
       - name: The builder's parts, and the window
         shell: pwsh
         run: |
-          $b = "C:\b\LongshotPS5Builder"
+          $b = "C:\b\PS5LongshotPlusBuilder"
           & "$b\python\python.exe" -I -u "$b\app\pipeline.py" --check
           if ($LASTEXITCODE) { throw "the check failed" }
           $env:QT_QPA_PLATFORM = "offscreen"
           & "$b\python\python.exe" -I -u "$b\app\app.py" --self-test
           if ($LASTEXITCODE) { throw "the window's self-test failed" }
           # (the start a player double-clicks: its command-line form, which waits and gives the exit code)
-          $p = Start-Process "$b\LongshotPS5Builder.exe" -ArgumentList "--cli", "--check" -Wait -PassThru
-          if ($p.ExitCode) { throw "LongshotPS5Builder.exe --cli --check: exit $($p.ExitCode)" }
+          $p = Start-Process "$b\PS5LongshotPlusBuilder.exe" -ArgumentList "--cli", "--check" -Wait -PassThru
+          if ($p.ExitCode) { throw "PS5LongshotPlusBuilder.exe --cli --check: exit $($p.ExitCode)" }
 
   publish:
     name: Attach them to the release

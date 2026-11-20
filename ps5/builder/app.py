@@ -1,4 +1,4 @@
-"""Longshot PS5 Builder, the window: choose your game file, build the PS5 title folder, copy it to the console.
+"""PS5 Longshot Plus Builder, the window: choose your game file, build the PS5 title folder, copy it to the console.
 
     python app.py
 
@@ -145,7 +145,7 @@ class Sender(QThread):
 class Window(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Longshot PS5 Builder")
+        self.setWindowTitle("PS5 Longshot Plus Builder")
         icon = os.path.join(HERE, "longshot.png")
         if os.path.exists(icon):
             self.setWindowIcon(QIcon(icon))
@@ -156,7 +156,7 @@ class Window(QWidget):
         self.stopping = False
         self.error = ""
 
-        head = QLabel("Longshot PS5 Builder")
+        head = QLabel("PS5 Longshot Plus Builder")
         f = QFont(self.font())
         f.setPointSize(f.pointSize() + 6)
         f.setBold(True)
@@ -432,7 +432,7 @@ class Window(QWidget):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Longshot PS5 Builder")
+    app.setApplicationName("PS5 Longshot Plus Builder")
     w = Window()
     w.show()
     if "--self-test" in sys.argv:

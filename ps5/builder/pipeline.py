@@ -1,4 +1,4 @@
-"""Longshot PS5 Builder: the title folder made from a game file and the kit, on Linux, macOS or Windows.
+"""PS5 Longshot Plus Builder: the title folder made from a game file and the kit, on Linux, macOS or Windows.
 
     python pipeline.py --game <game.nup | folder with exefs/> --out <folder> [--kit <kit>] [--work <folder>] [--jobs N]
 
@@ -401,7 +401,7 @@ def build(a):
     work = os.path.abspath(a.work or os.path.join(out, "longshot-ps5-work"))
     os.makedirs(work, exist_ok=True)
     free = shutil.disk_usage(work).free / 2**30
-    say("Longshot PS5 Builder: kit %s (%s); work folder %s (%.0f GB free)" % (info["longshot"], info["title_id"], work, free))
+    say("PS5 Longshot Plus Builder: kit %s (%s); work folder %s (%.0f GB free)" % (info["longshot"], info["title_id"], work, free))
     if free < 6:
         raise Stop("the work folder's disk has %.1f GB free: the build wants 6 GB" % free)
     gb = available_gb()
@@ -418,7 +418,7 @@ def build(a):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Longshot PS5 Builder: the PS5 title folder from your own game file")
+    ap = argparse.ArgumentParser(description="PS5 Longshot Plus Builder: the PS5 title folder from your own game file")
     ap.add_argument("--check", action="store_true", help="check the builder's own parts on this PC (no game is needed), and stop")
     ap.add_argument("--game", help="the game: a .nup file, or a folder with its exefs")
     ap.add_argument("--out", help="where the title folder goes")
