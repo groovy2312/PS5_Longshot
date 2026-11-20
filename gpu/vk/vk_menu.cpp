@@ -997,8 +997,13 @@ const char* tx_robust(int v) {
     return (unsigned)v < 3 ? t[v] : t[0];
 }
 const char* tx_preset(int v) {
+#ifdef __PROSPERO__
+    static const char* t[] = {"Custom", "Minimum (4GB)", "Low (6GB)", "Balanced (8GB)", "High (12GB)", "Ultra (16GB+)",
+                              "Auto (this PS5)"};
+#else
     static const char* t[] = {"Custom", "Minimum (4GB)", "Low (6GB)", "Balanced (8GB)", "High (12GB)", "Ultra (16GB+)",
                               "Auto (this PC)"};
+#endif
     return t[std::min(std::max(v, 0), 6)];
 }
 // (Sharpness: tuned for the window pass's neighbours one picture pixel apart, each about the old setting's sharpening on a
@@ -1064,6 +1069,9 @@ void apply_auto() {
     if (c.tier == 1) opts.upscale = 0, opts.sharpness = 0;   // (the plain scale, as RX_VK_LOW_SPEC: the lightest)
     opts.handheld = 0;   // (docked: the handheld profile gave a GTX 1050 a black picture; the Render resolution lightens the card)
     if (c.resolution) opts.resolution = ur::snap_render(c.upscaler, c.resolution);
+#ifdef __PROSPERO__
+    else if (c.upscaler == ::auto_settings::FSR4) opts.resolution = 0;
+#endif
     auto_tuned = 0;   // (chosen again: measured again in play)
     auto_tuning = {};
     opts.preset = kAutoPreset;   // (apply_preset set the tier's number)

@@ -1542,7 +1542,11 @@ void auto_profile() {
     hw.handheld = (deck && atoi(deck) == 1 && hw.integrated) || strstr(p.deviceName, "Custom GPU 0405") ||
                   strstr(p.deviceName, "Custom GPU 0932");
     hw.dlss_built = dlss_built();
+#ifdef __PROSPERO__
+    hw.fsr4_built = (fsr4_why() == FSR_OK);
+#else
     hw.fsr4_built = fsr4_built();
+#endif
     hw.xess_ready = xess_library_loaded();
     hw.threads = (int)std::thread::hardware_concurrency();
 #ifdef _WIN32
