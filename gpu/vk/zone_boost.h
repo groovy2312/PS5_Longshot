@@ -1,0 +1,39 @@
+#pragma once
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+static inline uint64_t zone_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
+}
+
+extern volatile uint64_t g_zone_boost_until_ms;
+
+static inline void zone_boost_trigger(void) {
+    const char *sec_env = getenv("RX_VK_ZONE_BOOST_SEC");
+    int sec = sec_env ? atoi(sec_env) : 40;
+    if (sec <= 0) return;
+    uint64_t target = zone_now_ms() + (uint64_t)sec * 1000ULL;
+    uint64_t cur = __atomic_load_n(&g_zone_boost_until_ms, __ATOMIC_RELAXED);
+    if (target > cur) {
+        __atomic_store_n(&g_zone_boost_until_ms, target, __ATOMIC_RELAXED);
+    }
+}
+
+static inline int zone_boost_active(void) {
+    uint64_t until = __atomic_load_n(&g_zone_boost_until_ms, __ATOMIC_RELAXED);
+    if (until == 0) return 0;
+    if (zone_now_ms() < until) return 1;
+    __atomic_store_n(&g_zone_boost_until_ms, 0, __ATOMIC_RELAXED);
+    return 0;
+}
+
+#ifdef __cplusplus
+}
+#endif

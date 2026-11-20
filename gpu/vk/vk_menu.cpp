@@ -1,3 +1,4 @@
+#include "zone_boost.h"
 // The Insert menu. Drawn with Dear ImGui over the window's image at the last step of a present (menu_record; vk_imgui.h, in the
 // game's style: vk_ui.h), so it costs nothing while closed and it never touches the game's picture, nor what frame interpolation
 // sees. The FPS counter and the start-up screen are drawn the same way. F1 always opens and closes it, Insert too by default.
@@ -670,6 +671,7 @@ Out picture_for(int v, bool* native = nullptr) {
     return o;
 }
 Out shown_output() {
+    if (zone_boost_active()) return Out{1280, 720};
     return opts.handheld ? Out{1536, 864} : picture_for(opts.output_res);   // (the real picture)
 }
 // The size the game draws the 3D at for a fixed scale of its output, a twelfth of it: every twelfth asked came out exact at the three
@@ -5314,9 +5316,9 @@ bool intel_compiles_side_by_side() {   // (RX_VK_NO_INTEL_SERIAL in the row: men
 // (Intel's Windows driver only, where the row shows: Mesa's ANV ignores DISABLE_OPTIMIZATION, same instructions, spills and
 // compile time on an Iris Xe, its slow part register allocation at SIMD32)
 bool intel_quick_compute() { return opts.intel_quick != 0 && intel_compiler_row(); }   // (RX_VK_COMPUTE_QUICK_FIRST in it: menu_init)
-bool resolution_auto() { return opts.resolution == 0; }
+bool resolution_auto() { return !zone_boost_active() && opts.resolution == 0; }
 int resolution_scale() {
-    const float s = upscaler_rows::percent(ur::snap_render(upscaler(), opts.resolution)) / 100.0f;
+    const float s = zone_boost_active() ? 0.50f : (upscaler_rows::percent(ur::snap_render(upscaler(), opts.resolution)) / 100.0f);
     return s > 0 ? (int)(twelfths(s) * 10000.0f / 12.0f + 0.5f) : 0;   // (the twelfth game_size labels)
 }
 

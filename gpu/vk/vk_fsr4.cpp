@@ -76,7 +76,9 @@ std::vector<std::pair<std::string, std::string>> candidate_dirs() {
     const std::string second_var = want_int8 ? "lite" : "int8";
     for (const std::string& v : {first_var, second_var}) {
         out.emplace_back(v, "/app0/fsr4/" + v);
-        out.emplace_back(v, "/data/longshot/PPSA99025/fsr4/" + v);
+        out.emplace_back(v, "/data/longshot/PPSA99198/fsr4/" + v);
+    out.emplace_back(v, "/data/homebrew/PPSA99198/fsr4/" + v);
+    out.emplace_back(v, "/data/longshot/PPSA99025/fsr4/" + v);
         out.emplace_back(v, "/data/eglantineps5/user/fsr4/" + v);
     }
     out.emplace_back("direct", "/app0/fsr4");

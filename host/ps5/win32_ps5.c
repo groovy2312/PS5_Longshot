@@ -1,3 +1,5 @@
+#include "../../gpu/vk/zone_boost.h"
+volatile uint64_t g_zone_boost_until_ms = 0;
 /* PS5: the Win32 calls host/posix/win32_posix.c leaves to the console (host/ps5/win32_ps5.h): memory, thread and fiber
    stacks, futexes, modules and the process's exit. Built into the PS5 executable only (ps5/build.py).
 
@@ -1186,6 +1188,9 @@ static void *memory_floor_watch(void *unused) {
             fprintf(stderr, "[ps5] memory floor: %llu MiB of direct memory free in %llu pieces (the title closes under %llu)\n",
                     (unsigned long long)(room >> 20), (unsigned long long)pieces, (unsigned long long)(floor >> 20));
         if (room < low) low = room;
+        if (room < floor + (400ull << 20)) {
+            zone_boost_trigger();
+        }
         if (room < floor) {
             int64_t at = 0;
             size_t largest = 0;
