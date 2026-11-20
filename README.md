@@ -805,3 +805,10 @@ people:
   DLSS, DLAA and Reflex, the exposure flicker and fog fixes, build speed, CI), madebyjordan (AMD FSR 4.1), N3oTraX (FSR 4 on
   Linux), shayderrr, gab9281, Wpaif, nicholasgower, ZurielAtr, Joey-Magnus, Zorkats,
   d3zessete, chrispository, vzeol, leonidasmark, Segmentree, ShyVortex, hiKareeem and i900gaming, among others.
+
+
+### Known Issues & Playability Notes (PS5 Fat / Slim & Pro)
+
+* **Zone Transitions & Memory Relief:** During extended play sessions with frequent transitions entering and exiting areas (such as Hyrule Field, Kakariko Village, Graveyard, or Castle Town), the title may occasionally close preventively to protect system memory on base consoles (**PS5 Fat / Slim**). **Simply restarting the title from the PS5 home screen restores normal playability immediately** from your last save or autosave, as all previously compiled shaders remain cached.
+* **Console Model Selection:** The Builder includes dedicated profiles for both **PS5 / PS5 Slim** (12 GB unified memory, 512-texel limit) and **PS5 Pro** (expanded memory mode, 1024-texel limit).
+
