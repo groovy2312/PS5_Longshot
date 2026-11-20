@@ -80,9 +80,15 @@ void load_device(VkDevice device) {
 }
 } // namespace vkx
 
+#ifdef __PROSPERO__
+extern "C" void hos_ps5_restart(const char* why);   // (host/ps5/win32_ps5.c: the title started again in place of this one)
+#endif
 namespace mkwvk {
 
 bool predicted_complete();   // vk_draw.cpp: completion of explicit All preparation, including zero keys
+bool precompile_wants_restart();   // vk_draw.cpp (PS5): the pipelines built so far, the title to start again
+bool precompile_warm_long();       // vk_draw.cpp (PS5): a long build of the noted pipelines under way
+bool precompile_warm_more();       // vk_draw.cpp (PS5): stopped for memory, the next launch goes on
 
 int display_refresh_mhz();   // (below, outside the unnamed namespace)
 
@@ -1187,6 +1193,10 @@ std::atomic<size_t> prep_done{0}, prep_total{0};
 std::atomic<size_t> prep_guess[3]{};
 std::atomic<bool> prep_skip[3]{};
 std::atomic<bool> prep_running{false}, prep_finished{false};
+// (PS5) the start prepared programs or pipelines: it ends once they are kept, and the title starts again (prepare_with_screen).
+// What a preparation's driver compiles leave in the title heap stays there, freed but held (906 MiB mapped for 489 in use after
+// a cold driver cache, 570 for 485 warm), and play on a base console needs that memory; a start of its own begins with none of it
+std::atomic<bool> prep_restart{false};
 HANDLE prep_ended = nullptr;
 #ifndef _WIN32
 const MkwVkWindow* prep_window = nullptr;   // (its size)
@@ -1224,10 +1234,16 @@ void prepare_with_screen() {
         if (update) prep_skip[0].store(true), prep_skip[1].store(true);
         const bool prepared = !update && prepare_run(prep_progress, false);
         if (!prepared) prep_skip[0].store(true);
+#ifdef __PROSPERO__
+        if (prepared) prep_restart.store(true);
+#endif
         // (a first start, or one after a start that did not finish them: the pipelines the notes predict, into the driver's cache)
         if ((prepared || (!update && predict_pending())) && compile_all() && !prepare_stopped()) {
             prep_done.store(0), prep_total.store(0);
             prep_stage.store(1);
+#ifdef __PROSPERO__
+            prep_restart.store(true);
+#endif
             predict_run(prep_progress);
         } else {
             prep_skip[1].store(true);
@@ -1237,6 +1253,9 @@ void prepare_with_screen() {
             prep_stage.store(2);
             precompile_run(prep_progress);
         }
+#ifdef __PROSPERO__
+        if (precompile_wants_restart()) prep_restart.store(true);
+#endif
         if (prepare_stopped()) pipeline_cache_save(true);   // (the driver's part built so far, for the next start)
         else if (update) prepare_background();
         prep_finished.store(true, std::memory_order_release);
@@ -1278,6 +1297,8 @@ void prepare_with_screen() {
             StartupState st;
             st.stage = stage, st.done = done, st.total = total, st.left = left, st.secs = secs;
             st.prepared = prepared, st.finished = finished, st.stopping = prepare_stopped();
+            st.restart = (prep_restart.load() || precompile_wants_restart()) && !prepare_stopped();
+            st.long_build = precompile_warm_long(), st.more = precompile_warm_more();
             st.saving = prepare_saving();
             st.whole = whole;
             const StartupView view = startup_view(st);
@@ -1331,6 +1352,12 @@ void prepare_with_screen() {
     startup_screen(nullptr);
     prep_running.store(false);
     logf("vk: start-up: the shaders took %.1f s", std::chrono::duration<double>(clock::now() - t0).count());
+#ifdef __PROSPERO__
+    if (prep_restart.load() && !prepare_stopped() && !env_on("RX_VK_PREPARE_NO_RESTART")) {
+        pipeline_cache_save(true);   // (what the preparation built, before this process goes)
+        hos_ps5_restart("the shaders were prepared in a start of their own (RX_VK_PREPARE_NO_RESTART=1 plays on)");
+    }
+#endif
 }
 bool started_up() {
     if (const char* e = getenv("RX_VK_START_DELAY")) Sleep((DWORD)atoi(e) * 1000);   // (diagnosis: a long start, as the first one is)
@@ -1759,3 +1786,8 @@ int display_refresh_mhz() {
     return mhz;
 }
 } // namespace mkwvk
+
+#ifdef __PROSPERO__
+/// (PS5, host/ps5/win32_ps5.c's memory floor) the start-up's shader preparation is under way: the notice it shows says so
+extern "C" int rx_vk_preparing(void) { return mkwvk::prep_running.load() ? 1 : 0; }
+#endif

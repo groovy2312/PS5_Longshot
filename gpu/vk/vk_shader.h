@@ -102,10 +102,15 @@ struct Program {
     std::vector<uint8_t> questions;
     uint64_t codes[4]{};   // (longshot) its stages' code keys: vertex (mesh), fragment, task, the header-only stage (the state list)
     // (longshot) a compute program read from the cache without its code (vk_progcache.cpp program_cache_read_light): where its
-    // SPIR-V is in longshot_programs.bin, and how many words; 0 words: it has its module (program_cache_complete makes it)
+    // SPIR-V is in longshot_programs.bin, and how many words; 0 words: it has its module (program_cache_complete makes it).
+    // From the compressed cache: code_at is the record's place, negative (-at - 1), and code_words has the code's offset in the
+    // unpacked record above its low 32 bits (program_code_words reads the count)
     int64_t code_at = 0;
     uint64_t code_words = 0;
 };
+
+/// A program's code word count still to read (Program::code_words without the compressed cache's offset)
+inline uint64_t program_code_words(const Program& p) { return p.code_at < 0 ? p.code_words & 0xffffffffull : p.code_words; }
 
 enum class ProgramKind { Graphics, Compute, Mesh };
 

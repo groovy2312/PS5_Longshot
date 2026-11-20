@@ -25,17 +25,16 @@ def check_source():
     wait = wait[:wait.index("\n}\n")]
     if "load_wait_note(ns);" not in wait:
         raise SystemExit("a first use's time with a load does not reach the safety net")
-    # (the compressed program cache: the rule is told of it by the switch disk_init reads, and the two readers that take a
-    # record by its parts' places step aside for it, so every read of a compressed record is program_cache_read's, unpacked)
+    # (the compressed program cache: the readers that take a plain record by its parts' places read a compressed one whole and
+    # unpack it first (zstd_record_plain), before any read in place)
     cache = (ROOT / "gpu/vk/vk_progcache.cpp").read_text(encoding="utf-8")
-    if 'disk_zstd = env_on("RX_VK_PROGRAM_CACHE_ZSTD");' not in cache or 'env_on("RX_VK_PROGRAM_CACHE_ZSTD")' not in progs:
-        raise SystemExit("the load default is not told of the compressed program cache by the switch that turns it on")
-    for head, leave in (("std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint64_t key, const DiskRecord& d) {",
-                         "if (disk_zstd) return nullptr;"),
-                        ("bool program_cache_variant(FILE* in, uint64_t key, const DiskRecord& d, uint64_t* variant) {",
-                         "if (disk_zstd) return false;")):
+    if 'disk_zstd = env_on("RX_VK_PROGRAM_CACHE_ZSTD");' not in cache:
+        raise SystemExit("the compressed program cache's switch is not read")
+    for head in ("std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint64_t key, const DiskRecord& d) {",
+                 "bool program_cache_variant(FILE* in, uint64_t key, const DiskRecord& d, uint64_t* variant) {",
+                 "bool complete_from(Program& p, FILE* in, std::mutex* mu, bool* busy = nullptr) {"):
         body = cache[cache.index(head):]
-        if leave not in body[:body.index("fread(")]:
+        if "zstd_record_plain(" not in body[:body.index("fread(")]:
             raise SystemExit("a compressed record could be read by its parts' places: " + head.split("(")[0])
     replay = (ROOT / "gpu/vk/vk_replay.cpp").read_text(encoding="utf-8")
     note = progs[progs.index("void programs_frames_note() {"):]

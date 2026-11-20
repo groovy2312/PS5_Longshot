@@ -13,11 +13,13 @@
 #ifndef _WIN32
 #include <fcntl.h>
 #include <sys/file.h>
+#include <unistd.h>
 #endif
 #include <io.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -99,6 +101,10 @@ constexpr size_t kDiskHold = 8u << 20;
 constexpr size_t kDiskHold = 0;
 #endif
 std::atomic<size_t> disk_held{0};   // (bytes written to disk_out and not flushed: written under disk_mu)
+// (PS5) What a preparation holds, in memory: put into the streams in one call each when flushed. Into the streams record by
+// record, a record larger than their buffer was a write call of its own, ~60 ms under disk_mu: eight workers then spent 90% of
+// their time waiting on it (and on seed_translate's reads behind it), ~4-18 programs a second at 5-35% of the CPUs
+std::vector<uint8_t> disk_pend, idx_pend;
 int64_t disk_end = -1;   // (where the next record goes in the file: asked once, counted from then on; disk_mu)
 // (the records' heads, in the file's order, in longshot_programs.idx beside it: see disk_init)
 FILE* disk_idx = nullptr;
@@ -378,9 +384,36 @@ void get_info(Reader& r, Shader::Info& i) {
 }
 
 namespace {
+/// (PS5) bytes to a stream's descriptor in as few write calls as it takes, after what the stream holds: the console's stdio wrote a
+/// large fwrite in its buffer's size, each call ~60 ms whatever its size, so 8 MB of held records took ~2.4 s under disk_mu
+bool write_whole(FILE* f, const std::vector<uint8_t>& bytes) {
+    fflush(f);
+#ifdef __PROSPERO__
+    const int fd = fileno(f);
+    for (size_t at = 0; at < bytes.size();) {
+        const ssize_t n = write(fd, bytes.data() + at, bytes.size() - at);
+        if (n <= 0) return false;
+        at += (size_t)n;
+    }
+    return true;
+#else
+    return fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size() && fflush(f) == 0;
+#endif
+}
 void disk_flush_locked() {   // (the records before their index entries: disk_mu held)
+    const auto t0 = std::chrono::steady_clock::now();
+    const size_t n = disk_pend.size();
+    if (disk_out && !disk_pend.empty()) write_whole(disk_out, disk_pend);
     if (disk_out) fflush(disk_out);
+    if (disk_idx && !idx_pend.empty()) write_whole(disk_idx, idx_pend);
     if (disk_idx) fflush(disk_idx);
+    disk_pend.clear(), idx_pend.clear();
+    if (n) {   // (the first few, timed: what a preparation's writes cost on this machine)
+        static std::atomic<int> told{0};
+        if (told++ < 6)
+            logf("vk: program cache: %zu KB of held records written in %.0f ms", n >> 10,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
     disk_held = 0;
 }
 }   // namespace
@@ -413,7 +446,8 @@ void program_cache_save(const Program& p, const std::vector<std::vector<uint32_t
     const uint32_t flags = *(const uint32_t*)o.data();
     std::vector<uint8_t> compressed;
     bool compressed_ok = false;
-#ifndef __PROSPERO__   // (PS5: the console's zstd only reads; records are kept as they are there)
+    // (PS5 too, since ps5/tools/build-zstd.sh builds the compressor: uncompressed, a whole preparation was ~5 GB written into the
+    // title folder at the console's few MB a second, the workers waiting on disk_mu)
     if (disk_zstd && o.size() >= 256) {
         compressed.resize(ZSTD_compressBound(o.size()));
         const size_t n = ZSTD_compress(compressed.data(), compressed.size(), o.data(), o.size(), 3);
@@ -422,7 +456,6 @@ void program_cache_save(const Program& p, const std::vector<std::vector<uint32_t
             compressed_ok = true;
         }
     }
-#endif
     const uint64_t stored = compressed_ok ? 8 + (uint64_t)compressed.size() : (uint64_t)o.size();
     const uint32_t kind = flags | (compressed_ok ? kCompressedKind : 0);
     const size_t head_size = disk_zstd ? kZstdHead : 16;
@@ -437,21 +470,26 @@ void program_cache_save(const Program& p, const std::vector<std::vector<uint32_t
     const int64_t at = disk_end;
     disk_end += (int64_t)head_size + (int64_t)stored;
     const bool hold = kDiskHold && disk_listing;   // (a preparation's: see kDiskHold)
-    fwrite(head, 8, 2, disk_out);
-    if (disk_zstd) fwrite(&kind, 4, 1, disk_out);
+    // (held: into disk_pend, written with the others at the flush; not held: into the stream and flushed now)
+    const auto out = [&](const void* data, size_t n) {
+        if (hold) disk_pend.insert(disk_pend.end(), (const uint8_t*)data, (const uint8_t*)data + n);
+        else fwrite(data, 1, n, disk_out);
+    };
+    out(head, 16);
+    if (disk_zstd) out(&kind, 4);
     if (compressed_ok) {
         const uint64_t usize = o.size();
-        fwrite(&usize, 8, 1, disk_out);
-        fwrite(compressed.data(), 1, compressed.size(), disk_out);
+        out(&usize, 8);
+        out(compressed.data(), compressed.size());
     } else {
-        fwrite(o.data(), 1, o.size(), disk_out);
+        out(o.data(), o.size());
     }
     if (!hold) fflush(disk_out);
     if (disk_idx) {   // (after the record: an index ahead of the file would name a record it does not have)
         std::vector<uint8_t> e;
         idx_put(e, p.key, stored, kind);
-        fwrite(e.data(), 1, e.size(), disk_idx);
-        if (!hold) fflush(disk_idx);
+        if (hold) idx_pend.insert(idx_pend.end(), e.begin(), e.end());
+        else fwrite(e.data(), 1, e.size(), disk_idx), fflush(disk_idx);
     }
     if (hold) {
         if (disk_held.fetch_add(head_size + (size_t)stored) + head_size + (size_t)stored >= kDiskHold) disk_flush_locked();
@@ -479,6 +517,30 @@ bool program_cache_payload(const uint8_t* stored, size_t stored_size, uint32_t k
     return true;
 }
 
+/// (the compressed cache) a record read whole from in (under mu when given) and unpacked into plain: false when it does not read
+/// or its head is not key's. The loads at a create call read a compressed record this way where the plain cache reads parts of
+/// it in place (its head, the code apart from the rest: program_cache_variant, program_cache_read_light, complete_from)
+bool zstd_record_plain(FILE* in, std::mutex* mu, uint64_t key, int64_t at, std::vector<uint8_t>& plain) {
+    uint8_t head[kZstdHead];
+    std::vector<uint8_t> stored;
+    {
+        std::unique_lock<std::mutex> lk;
+        if (mu) lk = std::unique_lock<std::mutex>(*mu);
+        if (!in || _fseeki64(in, at - (int64_t)kZstdHead, SEEK_SET) || fread(head, 1, sizeof head, in) != sizeof head) return false;
+        uint64_t h[2];
+        std::memcpy(h, head, 16);
+        if (h[0] != key || !h[1] || h[1] > (1ull << 31)) return false;
+        stored.resize((size_t)h[1]);
+        if (fread(stored.data(), 1, stored.size(), in) != stored.size()) return false;
+    }
+    uint32_t kind;
+    std::memcpy(&kind, head + 16, 4);
+    const uint8_t* payload = nullptr;
+    size_t payload_size = 0;
+    if (!program_cache_payload(stored.data(), stored.size(), kind, plain, &payload, &payload_size)) return false;
+    if (payload != plain.data()) plain.assign(payload, payload + payload_size);   // (a record kept as it is: copied)
+    return true;
+}
 /// The kept variants of key read from the file (in: a handle on it, used under mu when given) and made ready, to variants
 void program_cache_read(FILE* in, std::mutex* mu, uint64_t key, const std::vector<DiskRecord>& recs,
                         std::vector<std::unique_ptr<Program>>& variants) {
@@ -590,9 +652,6 @@ std::mutex light_mu;
 /// kFront or a tail longer than kTailMost, one that does not read): it is read whole, as before
 std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint64_t key, const DiskRecord& d) {
     program_cache_flush();
-    // (the compressed cache, RX_VK_PROGRAM_CACHE_ZSTD: a record is one zstd frame behind a 20-byte head, and nothing in it has
-    // a place of its own in the file. Not a record to read this way: the caller reads it whole, program_cache_read unpacks it)
-    if (disk_zstd) return nullptr;
     constexpr size_t kFront = 4096, kTailMost = 8u << 20;
     struct Counted {   // (the census, as program_cache_read counts)
         const std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
@@ -602,17 +661,24 @@ std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint
             if (programs_in_play.load(std::memory_order_relaxed) && !use_counters.background) census.play_loads++, census.play_load_ns += ns;
         }
     } counted;
-    std::vector<uint8_t> front(16 + std::min(d.size, kFront));
-    {
+    // (the compressed cache, RX_VK_PROGRAM_CACHE_ZSTD: a record is one zstd frame behind a 20-byte head and nothing in it has a
+    // place of its own in the file. It is read whole and unpacked, the program made from it without its code, and where the code
+    // is kept as the record's place with the code's offset in the unpacked record: complete_from reads and unpacks it again)
+    std::vector<uint8_t> plain;
+    if (disk_zstd && !zstd_record_plain(in, mu, key, d.at, plain)) return nullptr;
+    const size_t record_size = disk_zstd ? plain.size() : d.size;
+    std::vector<uint8_t> front(disk_zstd ? 0 : 16 + std::min(d.size, kFront));
+    if (!disk_zstd) {
         std::unique_lock<std::mutex> lk;
         if (mu) lk = std::unique_lock<std::mutex>(*mu);
         _fseeki64(in, d.at - 16, SEEK_SET);
         if (fread(front.data(), 1, front.size(), in) != front.size()) return nullptr;
+        uint64_t head[2];
+        std::memcpy(head, front.data(), 16);
+        if (head[0] != key || head[1] != d.size) return nullptr;
     }
-    uint64_t head[2];
-    std::memcpy(head, front.data(), 16);
-    if (head[0] != key || head[1] != d.size) return nullptr;
-    Reader r{front.data() + 16, front.data() + front.size()};
+    const uint8_t* const body = disk_zstd ? plain.data() : front.data() + 16;   // (the record's payload as far as read)
+    Reader r{body, disk_zstd ? plain.data() + plain.size() : front.data() + front.size()};
     auto p = std::make_unique<Program>();
     p->key = key;
     get_head(r, *p);
@@ -624,12 +690,14 @@ std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint
     st.vk_stage = r.get<VkShaderStageFlagBits>();
     const uint64_t words = r.get<uint64_t>();
     if (r.bad) return nullptr;
-    const size_t code_at = (size_t)(r.p - (front.data() + 16));
-    if (!words || words > (d.size - code_at) / 4) return nullptr;
+    const size_t code_at = (size_t)(r.p - body);
+    if (!words || words > (record_size - code_at) / 4) return nullptr;
     const size_t tail_at = code_at + (size_t)words * 4;
-    if (d.size - tail_at > kTailMost) return nullptr;
-    std::vector<uint8_t> tail(d.size - tail_at);
-    if (!tail.empty()) {
+    if (record_size - tail_at > kTailMost) return nullptr;
+    std::vector<uint8_t> tail(record_size - tail_at);
+    if (disk_zstd) {
+        std::memcpy(tail.data(), plain.data() + tail_at, tail.size());
+    } else if (!tail.empty()) {
         std::unique_lock<std::mutex> lk;
         if (mu) lk = std::unique_lock<std::mutex>(*mu);
         _fseeki64(in, d.at + (int64_t)tail_at, SEEK_SET);
@@ -639,7 +707,12 @@ std::unique_ptr<Program> program_cache_read_light(FILE* in, std::mutex* mu, uint
     t.list(st.c1);
     get_info(t, st.info);
     if (t.bad || !answers_fit(*p, p->answers)) return nullptr;
-    p->code_at = d.at + (int64_t)code_at, p->code_words = words;
+    if (disk_zstd) {   // (the record's place, negative, and the code's offset in the unpacked record above the word count)
+        if (words >> 32 || code_at >> 32) return nullptr;
+        p->code_at = -d.at - 1, p->code_words = words | (uint64_t)code_at << 32;
+    } else {
+        p->code_at = d.at + (int64_t)code_at, p->code_words = words;
+    }
     p->ready.store(true, std::memory_order_release);
     return p;
 }
@@ -650,11 +723,16 @@ bool complete_from(Program& p, FILE* in, std::mutex* mu, bool* busy = nullptr) {
     if (!p.code_words) return !p.failed;
     program_cache_flush();
     const int64_t code_at = p.code_at;
-    const uint64_t words = p.code_words;
+    const uint64_t packed = p.code_words, words = program_code_words(p);
     std::vector<uint32_t> spirv((size_t)words);
     p.code_words = 0;
     bool ok = in != nullptr;
-    if (ok) {
+    if (ok && code_at < 0) {   // (a compressed record: read whole and unpacked again, the code taken from it)
+        std::vector<uint8_t> plain;
+        const size_t off = (size_t)(packed >> 32);
+        ok = zstd_record_plain(in, mu, p.key, -code_at - 1, plain) && off + words * 4 <= plain.size();
+        if (ok) std::memcpy(spirv.data(), plain.data() + off, (size_t)words * 4);
+    } else if (ok) {
         std::unique_lock<std::mutex> dk;
         if (mu) dk = std::unique_lock<std::mutex>(*mu);
         _fseeki64(in, code_at, SEEK_SET);
@@ -663,7 +741,7 @@ bool complete_from(Program& p, FILE* in, std::mutex* mu, bool* busy = nullptr) {
     Stage& st = p.stages[0];
     if (ok) st.module = make_module(spirv, p.key, busy);
     if (ok && !st.module && busy && *busy) {   // (not made yet, not failed: a worker completes it, behind the gate)
-        p.code_at = code_at, p.code_words = words;
+        p.code_at = code_at, p.code_words = packed;
         return false;
     }
     if (!ok || !st.module) {
@@ -765,8 +843,20 @@ std::vector<DiskRecord> program_cache_records(uint64_t key) {
     return it == disk_records.end() ? std::vector<DiskRecord>{} : it->second;
 }
 bool program_cache_variant(FILE* in, uint64_t key, const DiskRecord& d, uint64_t* variant) {
-    if (disk_zstd) return false;   // (a compressed record's head is not read by its place: the caller takes the record whole)
-    // (a record's head: its key and size, the kind word, then the answers, which are what its variant is the hash of)
+    // (a record's head: its key and size, the kind word, then the answers, which are what its variant is the hash of. A compressed
+    // record is read whole and unpacked for it: its head has no place of its own in the file)
+    if (disk_zstd) {
+        std::vector<uint8_t> plain;
+        program_cache_flush();
+        if (!zstd_record_plain(in, nullptr, key, d.at, plain)) return false;
+        Reader r{plain.data(), plain.data() + plain.size()};
+        Program p;
+        r.get<uint32_t>();
+        r.list(p.answers);
+        if (r.bad) return false;
+        *variant = answers_hash(p);
+        return true;
+    }
     constexpr size_t kFront = 1024;
     std::vector<uint8_t> front(16 + std::min(d.size, kFront));
     program_cache_flush();

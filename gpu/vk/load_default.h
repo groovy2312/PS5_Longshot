@@ -21,9 +21,10 @@ struct Choice {
 /// waited seconds (an RX 580, 16 GB) is what the marker is for. marker: an earlier session of this install met the safety
 /// net below. compressed: the compressed program cache is in use
 inline Choice choose(const char* env, bool native_mesh, bool marker, bool compressed = false) {
-    // (the compressed program cache, RX_VK_PROGRAM_CACHE_ZSTD: a record is only read whole, unpacked. The loads at a create call
-    // read records by their parts' places and have not been run on it: start, whatever RX_VK_LOAD says)
-    if (compressed) return {false, "the program cache is compressed (RX_VK_PROGRAM_CACHE_ZSTD), whose records are only read whole"};
+    // (the compressed program cache, RX_VK_PROGRAM_CACHE_ZSTD, no longer decides it: the loads at a create call read a compressed
+    // record whole and unpack it where they read parts of a plain one in place (vk_progcache.cpp zstd_record_plain). It made
+    // every program load before the title, and the PS5's whole-game preparation then kept 7.4 GB of them in a base console's play)
+    (void)compressed;
     if (env && !std::strcmp(env, "create")) return {true, "RX_VK_LOAD=create"};
     if (env && !std::strcmp(env, "start")) return {false, "RX_VK_LOAD=start"};
     if (marker) return {false, "in an earlier session first uses waited too long for loads (longshot_load_start.txt)"};

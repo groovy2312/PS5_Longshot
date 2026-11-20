@@ -49,6 +49,7 @@ class CacheModuleCleanupTests(unittest.TestCase):
         source = _with_cache(SOURCE)
         header = (ROOT / 'gpu/vk/vk_shader.h').read_text(encoding='utf-8')
         structs = '\n'.join(block(header, marker) + ';' for marker in ('struct Stage {', 'struct Program {'))
+        structs += '\n' + block(header, 'inline uint64_t program_code_words(')
         structs += '\n' + block(source, 'struct DiskRecord {') + ';'
         functions = '\n'.join(block(source, marker) for marker in (
             'VkShaderModule make_module(', 'uint64_t answers_hash(', 'bool answers_fit(', 'void idx_put('))
@@ -57,6 +58,7 @@ class CacheModuleCleanupTests(unittest.TestCase):
             serialization = block(source, 'struct Reader {') + ';\n' + serialization
         functions += '\n' + serialization + block(source, 'void program_cache_save(')
         functions += '\n' + block(source, 'bool program_cache_payload(')
+        functions += '\n' + block(source, 'bool zstd_record_plain(')
         functions += '\n' + block(source, 'void program_cache_read(')
         # (a compute program's variants read without their code, which program_cache_load does for a compute key:
         # tests/test_program_cache_one_variant.py. These records are graphics programs', read whole)

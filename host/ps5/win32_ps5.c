@@ -609,6 +609,28 @@ void hos_ps5_exit(int code) {
     for (;;) sceKernelUsleep(100000);
 }
 
+/* ---- a start of its own: the title started again in place of this one (the shader preparation's launch, vk_main.cpp). Through
+   the shell's LoadExec of the title's own executable (a new process: what this one held is the console's again), with
+   /app0/restarted.txt beside it for the start it makes (host/hos_main.c takes it, so a run's switches that asked for a restart do
+   not ask again). Should the shell refuse, the player is told to start it again and the title closes ---- */
+#include <unistd.h>
+static void notify_player(const char *text);
+void hos_ps5_restart(const char *why) {
+    fprintf(stderr, "[ps5] restart: %s: the title starts again\n", why);
+    fflush(NULL);
+    /* (the start it makes knows itself by this file, which host/hos_main.c deletes: LoadExec's arguments do not reach it) */
+    FILE *m = fopen("/app0/restarted.txt", "w");
+    if (m) fputs(why, m), fclose(m);
+    static const char *const args[] = {"--restarted", NULL};
+    const int r = sceSystemServiceLoadExec("/app0/eboot.bin", args);
+    if (r == 0)   /* (taken: the shell ends this process and starts the new one, asynchronously) */
+        for (;;) sceKernelUsleep(100000);
+    unlink("/app0/restarted.txt");
+    fprintf(stderr, "[ps5] restart: LoadExec of /app0/eboot.bin answered %#x: closing instead\n", (unsigned)r);
+    notify_player("Longshot is ready. Start it again to play.");
+    hos_ps5_exit(0);
+}
+
 /* ---- what host/posix/prof.c and the C library give the Linux build ---- */
 /* shortcut: no sampling profiler on the console (prof.c reads Linux's perf events); HOS_PROFILE does nothing here */
 void hos_prof_start(void) {}
@@ -654,9 +676,17 @@ int fnmatch(const char *pattern, const char *s, int flags) {
 /* ---- a test run's clean stop: ps5/tools/run.py puts /app0/quit-run.txt in the title folder when its measurement is done;
    the title deletes it and leaves through the shell, as a player's quit would (never a kill: PS5_Vulkan's rule) ---- */
 #include <unistd.h>
+int hos_ps5_restarted;   /* (host/hos_main.c: this start is the one a restart made, --restarted) */
 static void *quit_watch(void *unused) {
     (void)unused;
-    for (;;) {
+    /* (HOS_PS5_TEST_RESTART=<seconds>: a restart that many seconds in, once (not again in the start it makes)) */
+    int restart_at = 0;
+    for (int ticks = 0;; ticks++) {
+        if (ticks == 4) {   /* (read 2 s in: this thread starts before longshot_env.txt and the run's switches are set) */
+            const char *t = getenv("HOS_PS5_TEST_RESTART");
+            restart_at = t && !hos_ps5_restarted ? atoi(t) : 0;
+        }
+        if (restart_at > 0 && ticks == restart_at * 2) hos_ps5_restart("HOS_PS5_TEST_RESTART");
         sceKernelUsleep(500000);
         if (access("/app0/quit-run.txt", F_OK) == 0) {
             unlink("/app0/quit-run.txt");
@@ -1173,6 +1203,11 @@ uint64_t hos_ps5_direct_room(void) {
    250 ms, every 25 ms once less than 1 GiB is left (a burst of render targets takes a gigabyte in a few frames there). */
 struct ps5_notification { uint8_t reserved[45]; char message[3075]; };   /* (what the shell's notification request takes) */
 int sceKernelSendNotificationRequest(int device, struct ps5_notification *request, size_t size, int blocking);
+static void notify_player(const char *text) {   /* (a notification on the console's screen, which outlives the title) */
+    static struct ps5_notification note;
+    snprintf(note.message, sizeof note.message, "%s", text);
+    (void)sceKernelSendNotificationRequest(0, &note, sizeof note, 0);
+}
 static uint64_t floor_bytes(void) {
     const char *e = getenv("HOS_PS5_MEM_FLOOR_MB");
     return (e && *e ? strtoull(e, NULL, 10) : 192) << 20;
@@ -1205,11 +1240,24 @@ static void *memory_floor_watch(void *unused) {
                     (unsigned long long)(floor >> 20), (unsigned long long)(sceKernelGetDirectMemorySize() >> 20),
                     (unsigned long long)(committed_bytes >> 20), (unsigned long long)(heap.mapped_bytes >> 20),
                     (unsigned long long)(__atomic_load_n(&radv_ps5_allocated_bytes, __ATOMIC_RELAXED) >> 20));
-            static struct ps5_notification note;
-            snprintf(note.message, sizeof note.message,
-                     "Longshot ran out of memory and was closed to keep the console safe. Lower the resolution or turn off "
-                     "frame generation in the menu, then load your last save.");
-            (void)sceKernelSendNotificationRequest(0, &note, sizeof note, 0);
+            {   /* (what the first start's pipeline build has under way, if it is building: gpu/vk/vk_draw.cpp) */
+                extern void rx_vk_inflight(char *out, size_t n) __attribute__((weak));
+                char inflight[1024];
+                if (rx_vk_inflight) {
+                    rx_vk_inflight(inflight, sizeof inflight);
+                    if (inflight[0]) fprintf(stderr, "[ps5] memory floor: pipelines being built:%s\n", inflight);
+                }
+            }
+            {   /* (the start-up's shader preparation under way, gpu/vk/vk_main.cpp: no setting of the player's to blame, and the
+                   next start goes on from what was kept) */
+                extern int rx_vk_preparing(void) __attribute__((weak));
+                if (rx_vk_preparing && rx_vk_preparing())
+                    notify_player("Longshot ran out of memory while preparing the game's graphics and was closed to keep the "
+                                  "console safe. Start it again: it goes on from where it stopped.");
+                else
+                    notify_player("Longshot ran out of memory and was closed to keep the console safe. Lower the resolution or "
+                                  "turn off frame generation in the menu, then load your last save.");
+            }
             hos_ps5_exit(3);
         }
         sceKernelUsleep(room < (1ull << 30) ? 25000 : 250000);

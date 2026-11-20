@@ -39,7 +39,8 @@ MODELS = {
     "base": {"name": "PS5 / PS5 Slim", "attribute3": 0x140040, "env": {"RX_VK_TEX_MAX_DIM": "512", "RX_VK_TEX_SKIP_MB": "2", "RX_VK_WB_MAX_KB": "1024"}},
     "pro": {"name": "PS5 Pro", "attribute3": 0x8540040, "env": {"RX_VK_WB_MAX_KB": "1024"}},
 }
-STEPS = ["Reading the game's program", "Translating it to C", "Compiling for the console", "Linking", "Making the title folder"]
+STEPS = ["Reading the game's program", "Translating it to C", "Compiling for the console", "Linking", "Making the title folder",
+         "Listing the game's shaders"]
 
 
 class Stop(Exception):
@@ -379,6 +380,19 @@ def check(a):
     say("@@done check")
 
 
+def shader_lists(kit, work, game, app):
+    """(ps5/builder/shader_lists.py) the game's shader list and the pipeline state list in the title folder: the console's first
+    start builds the pipelines before play, in a launch of its own, so play does not compile them (each compile leaves memory
+    the base console runs out of, issues #4 and #24). Made from the .nup alone: a folder given instead has no romfs to read"""
+    step(6)
+    if not os.path.isfile(game):
+        say("note: no .nup given, so no shader lists: the game compiles its shaders as it plays")
+        return
+    src, env = python_env(kit, work)
+    run([sys.executable, "-I", "-u", os.path.join(HERE, "shader_lists.py"), "--src", src, "--nup", game, "--work", work,
+         "--out", app], env=env, what="listing the game's shaders")
+
+
 def build(a):
     kit = find_kit(a.kit)
     info = json.load(open(os.path.join(kit, "kit.json")))
@@ -398,6 +412,7 @@ def build(a):
     objects = compile_game(kit, info, work, gen, clang, a.jobs or default_jobs())
     elf = link(kit, info, work, objects, lld, nm)
     app = title(kit, info, work, elf, native, out, a.model)
+    shader_lists(kit, work, a.game, app)
     say("@@done " + app)
     return app
 

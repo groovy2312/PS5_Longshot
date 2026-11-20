@@ -48,14 +48,17 @@ def main():
     draw = (ROOT / "gpu/vk/vk_draw.cpp").read_text(encoding="utf-8")
     structs = "\n".join(block(header, m) + ";" for m in ("struct Stage {", "struct Program {"))
     structs += "\n" + block(cache_h, "struct DiskRecord {") + ";"
+    structs += "\n" + block(header, "inline uint64_t program_code_words(")
     functions = "\n".join(block(shader, m) for m in ("VkShaderModule make_module(", "uint64_t answers_hash(", "bool answers_fit("))
     functions += "\n" + block(cache, "void idx_put(")
     functions += "\n" + block(cache_h, "struct Reader {") + ";\n"
     functions += cache[cache.index("void put_bytes("):cache.index("void program_cache_save(")]
     functions += block(cache, "void program_cache_save(") + "\n" + block(cache, "bool program_cache_payload(") + "\n"
+    functions += block(cache, "bool zstd_record_plain(") + "\n"
     functions += block(cache, "void program_cache_read(") + "\n"
     functions += cache[cache.index("namespace {\nstd::mutex light_mu;"):cache.index("/// (shader_mu held) the kept variants of key go to its list")]
     functions += block(cache, "void program_cache_load(").replace("bool keep) {", "bool keep = false) {")
+    functions += "\n" + block(cache, "bool program_cache_variant(") + "\n"
     # the dispatch: a program is made whole before its module is used, in both places
     d = draw[draw.index("void dispatch(VkCommandBuffer cmd, NvnState& s, uint32_t x, uint32_t y, uint32_t z, uint64_t indirect) {"):]
     d = d[:d.index("\n}\n")]

@@ -98,17 +98,42 @@ std::unordered_map<uint64_t, std::vector<DiskRecord>> disk_records;
 std::unordered_map<uint64_t, std::vector<DiskRecord>> disk_taken;
 std::atomic<int64_t> st_cache_hits{0};
 #define PROF_EXACT()
-// (vk_progcache.cpp's compressed cache, RX_VK_PROGRAM_CACHE_ZSTD: off here but for the last case below, which only asks that a
-// compressed record is not read by its parts' places. The zstd calls the cut functions name are never made with it off)
+// (vk_progcache.cpp's compressed cache, RX_VK_PROGRAM_CACHE_ZSTD: off here but for the last cases below. zstd stands in as a
+// run-length code, lossless and smaller on these records' repeated words: the cache treats the codec as a black box)
 bool disk_zstd = false;
 constexpr size_t kZstdHead = 20;
 constexpr uint32_t kCompressedKind = 16;
 extern "C" {
-size_t ZSTD_compressBound(size_t n) { return n + 64; }
-size_t ZSTD_compress(void*, size_t, const void*, size_t, int) { return (size_t)-1; }
-size_t ZSTD_decompress(void*, size_t, const void*, size_t) { return (size_t)-1; }
+size_t ZSTD_compressBound(size_t n) { return 2 * n + 64; }
+size_t ZSTD_compress(void* dst, size_t cap, const void* src, size_t n, int) {   // (value, run of 1-255) pairs
+    const uint8_t* in = (const uint8_t*)src;
+    uint8_t* out = (uint8_t*)dst;
+    size_t o = 0;
+    for (size_t i = 0; i < n;) {
+        size_t run = 1;
+        while (i + run < n && run < 255 && in[i + run] == in[i]) run++;
+        if (o + 2 > cap) return (size_t)-1;
+        out[o++] = in[i], out[o++] = (uint8_t)run, i += run;
+    }
+    return o;
+}
+size_t ZSTD_decompress(void* dst, size_t cap, const void* src, size_t n) {
+    const uint8_t* in = (const uint8_t*)src;
+    uint8_t* out = (uint8_t*)dst;
+    size_t o = 0;
+    for (size_t i = 0; i + 1 < n; i += 2) {
+        if (o + in[i + 1] > cap) return (size_t)-1;
+        std::memset(out + o, in[i], in[i + 1]), o += in[i + 1];
+    }
+    return n % 2 ? (size_t)-1 : o;
+}
 unsigned ZSTD_isError(size_t n) { return n == (size_t)-1; }
 }
+// (the preparation's held records, kDiskHold: none here, every record written as it is saved)
+constexpr size_t kDiskHold = 0;
+std::atomic<size_t> disk_held{0};
+std::vector<uint8_t> disk_pend, idx_pend;
+int64_t disk_end = -1;
 // (the census's counters and the load at a program's create call, gpu/vk/vk_programs.h: counted, none here)
 struct { int64_t loads = 0, load_ns = 0; bool background = false; } use_counters;
 struct { int64_t play_loads = 0, play_load_ns = 0; } census;
@@ -284,16 +309,44 @@ int main(int argc, char** argv) {
         disk_in = was;
         std::fclose(cut);
     }
-    {   // the compressed cache: a record is one zstd frame, so it is not read by its parts' places at all (nothing is read
-        // of it here), and its caller reads it whole; the same record with the cache as it is by default reads this way
+    {   // the plain cache: a record read without its code
         save(21, 1, 600);
         const DiskRecord rec = disk_records.at(21)[0];
         const size_t before = bytes_read;
-        disk_zstd = true;
-        CHECK(!program_cache_read_light(disk_in, &disk_mu, 21, rec) && bytes_read == before);
-        disk_zstd = false;
         const std::unique_ptr<Program> light = program_cache_read_light(disk_in, &disk_mu, 21, rec);
         CHECK(light && light->workgroup[2] == 600 && light->code_words && !light->stages[0].module && bytes_read > before);
+        uint64_t plain_variant = 0;
+        CHECK(program_cache_variant(disk_in, 21, rec, &plain_variant) && plain_variant == light->variant);
+    }
+    {   // the compressed cache (from here on: its records have the 20-byte head): the loads at a create call read a record whole
+        // and unpack it where they read a plain one's parts in place. Its head gives the variant; read without its code, the
+        // program keeps the record's place (negative) and the code's offset; completing it reads and unpacks it again and makes
+        // the module from the same code a plain read gives
+        disk_zstd = true;
+        save(22, 1, 700);
+        save(22, 2, 701, 2);
+        const std::vector<DiskRecord> recs = disk_records.at(22);
+        CHECK(recs.size() == 2 && (recs[0].kind & kCompressedKind) && (recs[1].kind & kCompressedKind));
+        for (size_t k = 0; k < 2; k++) {
+            uint64_t variant = 0;
+            CHECK(program_cache_variant(disk_in, 22, recs[k], &variant));
+            std::unique_ptr<Program> p = program_cache_read_light(disk_in, &disk_mu, 22, recs[k]);
+            CHECK(p && p->variant == variant && p->workgroup[2] == 700 + k && !p->stages[0].module);
+            CHECK(p->code_at < 0 && program_code_words(*p) == kWords && (p->code_words >> 32) > 0);
+            CHECK(p->stages[0].c1.size() == 2 && p->stages[0].c1[0] == (uint8_t)(700 + k));
+            const unsigned modules = created;
+            CHECK(program_cache_complete(*p) && p->stages[0].module && created == modules + 1 && !p->code_words);
+            CHECK(made_of.at(p->stages[0].module).first == 700 + k && made_of.at(p->stages[0].module).second == kWords);
+        }
+        uint64_t v0 = 0, v1 = 0;
+        CHECK(program_cache_variant(disk_in, 22, recs[0], &v0) && program_cache_variant(disk_in, 22, recs[1], &v1) && v0 != v1);
+        // (a record cut short in the file: no program, nothing made)
+        DiskRecord bad = recs[0];
+        bad.at += 4;
+        CHECK(!program_cache_read_light(disk_in, &disk_mu, 22, bad));
+        uint64_t none = 0;
+        CHECK(!program_cache_variant(disk_in, 22, bad, &none));
+        disk_zstd = false;
     }
     std::printf("modules %u, bytes read at the load %zu of %zu\n", load_modules, load_bytes, file_bytes);
     return 0;

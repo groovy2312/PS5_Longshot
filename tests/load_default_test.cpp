@@ -2,6 +2,7 @@
 // gpu/vk/load_default.h alone (tests/test_load_default.py)
 #include "../gpu/vk/load_default.h"
 #include <cstdlib>
+#include <cstring>
 #define CHECK(c) do { if (!(c)) { std::fprintf(stderr, "CHECK failed line %d: %s\n", __LINE__, #c); std::exit(1); } } while (0)
 
 int main(int argc, char** argv) {
@@ -13,13 +14,13 @@ int main(int argc, char** argv) {
             CHECK(choose("create", mesh, marker).create);
             CHECK(!choose("start", mesh, marker).create);
         }
-    // the compressed program cache: start, whatever the switch, the GPU and the marker say
+    // the compressed program cache decides nothing: the same choice as with the plain one
     for (int mesh = 0; mesh < 2; mesh++)
-        for (int marker = 0; marker < 2; marker++) {
-            CHECK(!choose("create", mesh, marker, true).create && !choose(nullptr, mesh, marker, true).create);
-            CHECK(std::strstr(choose("create", mesh, marker, true).why, "RX_VK_PROGRAM_CACHE_ZSTD"));
-            CHECK(choose("create", mesh, marker, false).create);
-        }
+        for (int marker = 0; marker < 2; marker++)
+            for (const char* sw : {"create", "start", (const char*)nullptr}) {
+                CHECK(choose(sw, mesh, marker, true).create == choose(sw, mesh, marker, false).create);
+                CHECK(!std::strcmp(choose(sw, mesh, marker, true).why, choose(sw, mesh, marker, false).why));
+            }
     // the default: create wherever no marker is there, with mesh shaders or through the compute fallback (a start there kept
     // 32,645 pipelines and every fallback program before the title, and left a 16 GB PC near its commit limit: issues 869
     // and 933); anything else the switch says is not a choice

@@ -18,7 +18,8 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QF
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PIPELINE = os.environ.get("LONGSHOT_PS5_PIPELINE", os.path.join(HERE, "pipeline.py"))
-STEPS = ["Reading the game's program", "Translating it to C", "Compiling for the console", "Linking", "Making the title folder"]
+STEPS = ["Reading the game's program", "Translating it to C", "Compiling for the console", "Linking", "Making the title folder",
+         "Listing the game's shaders"]
 ABOUT = {
     1: "A few seconds.",
     2: "5 to 10 minutes. Uses about 6 GB of memory.",

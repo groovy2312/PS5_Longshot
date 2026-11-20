@@ -4991,7 +4991,14 @@ void draw_startup(ui::Ctx& c) {
                  ui::kSoft, v.left.c_str());
         if (!v.right.empty())
             ui::text(c, c.f.body, px, ImVec2(x1 - ui::size_of(c.f.body, px, v.right.c_str()).x, under + 12 * k), ui::kSoft, v.right.c_str());
-        if (!v.hint.empty()) ui::text_centre(c, c.f.body, 15.5f * k, ImVec2(cx, by + 92 * k), ui::kDim, v.hint.c_str());
+        // (one line or several, each centred: '\n' between them)
+        float hy = by + 92 * k;
+        for (size_t at = 0; at < v.hint.size();) {
+            const size_t nl = std::min(v.hint.find('\n', at), v.hint.size());
+            const std::string line = v.hint.substr(at, nl - at);
+            ui::text_centre(c, c.f.body, 15.5f * k, ImVec2(cx, hy), ui::kDim, line.c_str());
+            hy += 23 * k, at = nl + 1;
+        }
     }
     if (const float f = startup_fade.load(std::memory_order_relaxed); f > 0)   // (the end: to black, the game's first frame next)
         c.d->AddRectFilled(ImVec2(0, 0), ImVec2(w, h), ui::rgba(0, 0, 0, (int)(std::min(f, 1.0f) * 255 + 0.5f)));

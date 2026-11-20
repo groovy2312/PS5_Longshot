@@ -39,10 +39,16 @@ class ProgramCacheIndexTests(unittest.TestCase):
 
     def test_index_after_record(self):
         save = block(self.source, "void program_cache_save(")
-        record = save.index("fwrite(o.data(), 1, o.size(), disk_out)")
+        # (out() writes the record, or holds it in disk_pend during a preparation; the index entry follows it either way, and
+        # disk_flush_locked writes the held records before their held index entries)
+        record = save.index("out(o.data(), o.size())")
         index = save.index("fwrite(e.data(), 1, e.size(), disk_idx)")
+        held = save.index("idx_pend.insert(")
         self.assertLess(record, index, "the index entry must follow its record")
+        self.assertLess(record, held, "the held index entry must follow its record")
         self.assertIn("fflush(disk_idx)", save)
+        flush = block(self.source, "void disk_flush_locked(")
+        self.assertLess(flush.index("write_whole(disk_out, disk_pend)"), flush.index("write_whole(disk_idx, idx_pend)"))
 
     def test_index_checked_at_start(self):
         init = block(self.source, "void disk_init(")

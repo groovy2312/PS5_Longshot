@@ -2,7 +2,7 @@
 
     python -I nx2/nup.py <file.nup>                      list the titles and their trees
     python -I nx2/nup.py <file.nup> --verify            read-only hashes/extents and expected game .zs headers
-    python -I nx2/nup.py <file.nup> --extract <dir> [--title <n|version>] [--only exefs|romfs]
+    python -I nx2/nup.py <file.nup> --extract <dir> [--title <n|version>] [--only exefs|romfs] [--paths <prefix>,...]
 
 The layout (worked out from the file; little-endian):
     0x000  "NUP\\x01" header, u64 file size at +0x40
@@ -590,7 +590,9 @@ def out_of_space(error, dst, part, rel, size):
         part, rel, size, free, ", " + kind if kind else ""))
 
 
-def extract(nup, t, out, only=None, quiet=False):
+def extract(nup, t, out, only=None, quiet=False, paths=None):
+    """paths: only the files whose path in their part starts with one of these (the PS5 builder's shader census: a few hundred
+    MB of romfs, not 25 GB)"""
     total = n = written = 0
     digests = {}
     details = getattr(nup, "file_details", ())
@@ -615,6 +617,8 @@ def extract(nup, t, out, only=None, quiet=False):
             continue
         damaged = [] if part == "romfs" else None
         for rel, r in nup.walk(t[part]):
+            if paths and not rel.startswith(tuple(paths)):
+                continue
             dst = where.path(part, rel)
             checked = damaged is not None and rel.endswith(".zs")
             expected = digests.get(id(r)) if checked else None
@@ -807,6 +811,7 @@ def main():
     ap.add_argument("--verify", action="store_true", help="read-only hashes/extents and expected game .zs headers; all titles unless --title")
     ap.add_argument("--title", help="index, version or title id (extract default: newest; verify default: all)")
     ap.add_argument("--only", choices=("exefs", "romfs"))
+    ap.add_argument("--paths", help="comma-separated path prefixes inside the part: only those files are extracted")
     a = ap.parse_args()
     if a.verify and a.extract:
         ap.error("--verify does not extract; run extraction separately")
@@ -845,7 +850,7 @@ def main():
             folder = parent
         free = shutil.disk_usage(folder).free
         print("extracting title %d (v%d) to %s (%.0f GB free)" % (t["index"], t["version"], a.extract, free / 1e9))
-        n, total = extract(nup, t, a.extract, a.only)
+        n, total = extract(nup, t, a.extract, a.only, paths=a.paths.split(",") if a.paths else None)
         print("done: %d files written, %.2f GB" % (n, total / 1e9))
         if a.only != "romfs":   # (main is ZBIC-compressed on firmware 22+: made a plain NSO for the tools)
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

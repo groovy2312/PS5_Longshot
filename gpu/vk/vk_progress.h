@@ -141,6 +141,9 @@ struct StartupState {
     size_t done = 0, total = 0;
     double left = -1, secs = 0;
     bool prepared = false, finished = false, stopping = false;
+    bool restart = false;   // (PS5: the title starts again once this is over, so play has the memory the preparation used)
+    bool long_build = false;   // (PS5: the noted pipelines are being built, many of them: a first start's, in parts)
+    bool more = false;         // (PS5: this part is over, not the whole: the next launch goes on)
     bool saving = false;   // (the pipeline cache written out, every pipeline counted: prepare_saving)
     double whole = -1;   // (the bar over every part, PrepareBar::fraction; negative: the bar is this part's done of total)
 };
@@ -208,8 +211,29 @@ struct PrepareBar {
     }
 };
 
-/// The screen for a state. The first second shows the wordmark alone: a start with next to nothing to prepare is over by then
+inline StartupView startup_view_any(const StartupState& s);
+/// The screen for a state. The first second shows the wordmark alone: a start with next to nothing to prepare is over by then.
+/// (PS5) Worded for a player on a couch, not a PC: what is going on, why, and that it ends by itself
 inline StartupView startup_view(const StartupState& s) {
+    StartupView v = startup_view_any(s);
+#ifdef __PROSPERO__
+    if (s.stopping) {
+        v.title = "Closing";
+        v.left = "What is ready is kept for the next start";
+    } else if (s.finished) {
+        if (s.restart) v.title = s.more ? "Restarting to free memory, then going on" : "Ready! Restarting the game";
+    } else if (!v.title.empty() && (s.prepared || s.stage == 1 || s.long_build)) {
+        v.title = "Getting the game ready for your console";
+        v.hint = "Longshot is preparing the game's graphics. This happens once, after an install or an update.\n"
+                 "Done now, the game doesn't have to stop and build them while you play, which uses up memory\n"
+                 "and can crash it in big areas like Castle Town. The game may restart a few times to free memory\n"
+                 "and goes on from where it was; when it is done, it starts by itself.\n"
+                 "You can close it at any time: what is ready is kept.";
+    }
+#endif
+    return v;
+}
+inline StartupView startup_view_any(const StartupState& s) {
     StartupView v;
     if (s.stopping) {
         v.title = "Closing";
