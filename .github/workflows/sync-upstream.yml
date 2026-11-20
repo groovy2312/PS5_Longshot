@@ -1,0 +1,35 @@
+name: Sync Upstream heydemoura
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout custom-build
+        uses: actions/checkout@v4
+        with:
+          ref: custom-build
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch and merge upstream heydemoura/PS5_Longshot
+        run: |
+          git remote add upstream https://github.com/heydemoura/PS5_Longshot.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Ya está al día con heydemoura/PS5_Longshot."
+            exit 0
+          fi
+          git merge upstream/main --no-edit -m "chore: auto-sync upstream heydemoura/PS5_Longshot"
+          git push origin custom-build
