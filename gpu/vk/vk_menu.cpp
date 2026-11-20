@@ -1,3 +1,4 @@
+#include "startup_i18n.h"
 #include "zone_boost.h"
 // The Insert menu. Drawn with Dear ImGui over the window's image at the last step of a present (menu_record; vk_imgui.h, in the
 // game's style: vk_ui.h), so it costs nothing while closed and it never touches the game's picture, nor what frame interpolation
@@ -4969,13 +4970,14 @@ void draw_startup(ui::Ctx& c) {
     ui::flourish(c, cx - 190 * k, cx + 190 * k, y + 66 * k, ui::kAccent);
     ui::text_centre(c, c.f.body, 14.5f * k, ImVec2(cx, y + 78 * k), ui::kDim, v.version.c_str());
     if (!v.title.empty()) {
+        const char* lc = i18n::lang_code();
         y += 120 * k;
-        if (!v.step.empty()) {   // ("STEP 2 OF 2" as "Step 2 of 2")
-            std::string step = v.step;
-            for (size_t i = 1; i < step.size(); i++) step[i] = (char)tolower((unsigned char)step[i]);
+        if (!v.step.empty()) {
+            const std::string step = startup_i18n::translate(v.step, lc);
             ui::text_centre(c, c.f.body, 15 * k, ImVec2(cx, y), ui::kAccent, step.c_str());
         }
-        ui::text_centre(c, c.f.heading, 24 * k, ImVec2(cx, y + 20 * k), ui::kInk, v.title.c_str());
+        const std::string title_loc = startup_i18n::translate(v.title, lc);
+        ui::text_centre(c, c.f.heading, 24 * k, ImVec2(cx, y + 20 * k), ui::kInk, title_loc.c_str());
         const float x0 = cx - 270 * k, x1 = cx + 270 * k, by = y + 64 * k;
         float under = by;
         if (v.fraction >= 0) {   // (the bar as a value cell: a dark cell, gold inside, the percentage on it)
@@ -4997,13 +4999,16 @@ void draw_startup(ui::Ctx& c) {
         const float px = 16.5f * k;
         ui::text(c, c.f.body, px, ImVec2(v.fraction >= 0 ? x0 : cx - ui::size_of(c.f.body, px, v.left.c_str()).x * 0.5f, under + 12 * k),
                  ui::kSoft, v.left.c_str());
-        if (!v.right.empty())
-            ui::text(c, c.f.body, px, ImVec2(x1 - ui::size_of(c.f.body, px, v.right.c_str()).x, under + 12 * k), ui::kSoft, v.right.c_str());
+        if (!v.right.empty()) {
+            const std::string right_loc = startup_i18n::translate(v.right, lc);
+            ui::text(c, c.f.body, px, ImVec2(x1 - ui::size_of(c.f.body, px, right_loc.c_str()).x, under + 12 * k), ui::kSoft, right_loc.c_str());
+        }
+        const std::string hint_loc = startup_i18n::translate(v.hint, lc);
         // (one line or several, each centred: '\n' between them)
         float hy = by + 92 * k;
-        for (size_t at = 0; at < v.hint.size();) {
-            const size_t nl = std::min(v.hint.find('\n', at), v.hint.size());
-            const std::string line = v.hint.substr(at, nl - at);
+        for (size_t at = 0; at < hint_loc.size();) {
+            const size_t nl = std::min(hint_loc.find('\n', at), hint_loc.size());
+            const std::string line = hint_loc.substr(at, nl - at);
             ui::text_centre(c, c.f.body, 15.5f * k, ImVec2(cx, hy), ui::kDim, line.c_str());
             hy += 23 * k, at = nl + 1;
         }
