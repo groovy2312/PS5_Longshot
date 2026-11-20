@@ -8,7 +8,7 @@ namespace mkwvk::fg_by {
 // row has no Auto: beside the Frame generation row's a player read the two as one. A file's 0 is kDefault there)
 enum : int { kAuto = 0, kBuiltIn = 1, kFsr3 = 2, kMihawk = 3, kLossless = 4 };
 #ifdef __PROSPERO__
-inline constexpr int kLeast = kBuiltIn, kMost = kLossless, kDefault = kMihawk;
+inline constexpr int kLeast = kBuiltIn, kMost = kLossless, kDefault = kBuiltIn;
 #else
 inline constexpr int kLeast = kAuto, kMost = kBuiltIn, kDefault = kAuto;
 #endif

@@ -1076,7 +1076,7 @@ void apply_auto() {
     opts.resolution = 0;     // Auto (dynamic internal resolution)
     opts.sharpness = 30;     // 30% sharpness
     opts.framegen = 2;       // 2x (game at 30 fps)
-    opts.framegen_by = fg_by::kMihawk; // MihawkGen
+    opts.framegen_by = fg_by::kBuiltIn; // Built-in (FG integrada)
 #endif
     auto_tuned = 0;   // (chosen again: measured again in play)
     auto_tuning = {};
