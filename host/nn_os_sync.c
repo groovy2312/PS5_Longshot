@@ -195,19 +195,100 @@ static Obj *obj_lookup(uint64_t key, int kind);
    direct-mapped cache per thread answers those. An entry holds while its object is still that address's and of the
    kind asked for (objects are reused, never freed: spares). HOS_NO_OBJ_CACHE=1: off. */
 static Obj *obj_nockpt(uint64_t key, int kind);
+static void obj_cache_flush(void);
+static int obj_cache_due;   /* (HOS_OBJ_CACHE: a thread's counts are due in the log line: obj_cache_flush) */
 static Obj *obj(uint64_t key, int kind) {
     hos_vcore_checkpoint();   /* (virtual cores: every nn::os call, where a better waiter takes the core) */
-    return obj_nockpt(key, kind);
+    Obj *o = obj_nockpt(key, kind);
+    if (__atomic_load_n(&obj_cache_due, __ATOMIC_RELAXED)) obj_cache_flush();   /* (HOS_OBJ_CACHE only: below) */
+    return o;
 }
 /* obj without the checkpoint, for lookups under a host lock: a checkpoint there can give the core up and wait for one
    while the lock is held, and a thread that holds a core can then block on that lock (wait_any's scan under mw_lock vs
    poke_multiwait: a stall until the 250 ms vcore escape) */
+/* (longshot) HOS_OBJ_CACHE=<entries> (16384 when unset): the per-thread cache with that many entries (256 to 65536,
+   rounded up to a power of two), made on the heap at the thread's first lookup, instead of the fixed 1024; and a log
+   line every 10 s with its lookups and misses. OoT's f_80364080 (under the graphics front end's record pass,
+   0x806602e0) searches a table whose every slot has its own mutex, locking and unlocking each slot it passes: a search
+   over more slots than the cache holds misses at every step, and obj_lookup was ~80 % of that function's time on the
+   main thread and 2 % of the main thread's samples in the Market (RTX 3090, 5900X). Four ways a set (a set is one
+   64-byte line), the oldest way replaced, and the set chosen by a mixing hash: the fixed cache's multiply-and-shift
+   sends mutexes at a power-of-two stride (an array of slots) to few entries, and even 16384 entries of it missed 1,880
+   of a 4,000-slot walk at a 0x80 stride every pass (tests/test_obj_cache_size.py). Unset, empty or not a number: 16384;
+   HOS_OBJ_CACHE=0: the fixed cache, as before. A thread that ends leaves its cache (entries x 16 bytes); the log line
+   counts the caches made. What obj_nockpt reaches runs under mw_lock in WaitAny's scan (tests/test_multiwait_wake.py:
+   only calls that keep the core): the counting is the thread's own there, and the sums and the log line are made by
+   obj() (obj_cache_flush), which no lock holder calls */
+static int obj_cache_entries(const char *v) {
+    enum { OBJ_CACHE_DEFAULT = 16384 };   /* (unset: the size the Market's walk fits in, measured) */
+    long n = 0;
+    if (!v || !*v) return OBJ_CACHE_DEFAULT;
+    for (const char *p = v; *p; p++) {
+        if (*p < '0' || *p > '9') return OBJ_CACHE_DEFAULT;
+        if (n < 1000000) n = n * 10 + (*p - '0');
+    }
+    if (n <= 0) return 0;
+    int e = 256;
+    while (e < n && e < 65536) e <<= 1;
+    return e;
+}
+typedef struct { uint64_t key; Obj *o; } ObjCacheEntry;
+static _Thread_local uint64_t obj_cache_tl_looks, obj_cache_tl_misses;
+static _Thread_local int obj_cache_tl_made;   /* (1: made, not counted yet; 2: counted) */
+static int obj_cache_size_logged;
+static volatile LONG64 obj_cache_looks, obj_cache_misses, obj_cache_made, obj_cache_logged_ns;
+static Obj *obj_lookup_cached(uint64_t key, int kind, int entries) {
+    static _Thread_local ObjCacheEntry *cache;   /* (sets of four, each set 64-byte aligned) */
+    static _Thread_local unsigned shift;
+    if (!cache) {
+        void *raw = calloc((size_t)entries + 4, sizeof *cache);
+        if (!raw) return obj_lookup(key, kind);
+        cache = (ObjCacheEntry *)(((uintptr_t)raw + 63) & ~(uintptr_t)63);
+        shift = 64;
+        for (int e = entries / 4; e > 1; e >>= 1) shift--;
+        obj_cache_tl_made = 1;
+        __atomic_store_n(&obj_cache_size_logged, entries, __ATOMIC_RELAXED);
+    }
+    uint64_t h = key >> 3;   /* (murmur3's finalizer: every key bit reaches the set index) */
+    h ^= h >> 33, h *= 0xff51afd7ed558ccdULL, h ^= h >> 33, h *= 0xc4ceb9fe1a85ec53ULL, h ^= h >> 33;
+    ObjCacheEntry *set = &cache[(h >> shift) * 4];
+    obj_cache_tl_looks++;
+    for (int w = 0; w < 4; w++) {
+        Obj *o = set[w].o;
+        if (set[w].key == key && o && __atomic_load_n(&o->key, __ATOMIC_RELAXED) == key &&
+            __atomic_load_n(&o->kind, __ATOMIC_ACQUIRE) == kind)
+            return o;   /* (a hit: no shared write) */
+    }
+    obj_cache_tl_misses++;
+    Obj *o = obj_lookup(key, kind);
+    set[3] = set[2], set[2] = set[1], set[1] = set[0];   /* (the oldest goes) */
+    set[0].key = key, set[0].o = o;
+    if (obj_cache_tl_looks >= 65536 && !__atomic_load_n(&obj_cache_due, __ATOMIC_RELAXED))
+        __atomic_store_n(&obj_cache_due, 1, __ATOMIC_RELAXED);
+    return o;
+}
+/* (obj(), HOS_OBJ_CACHE: this thread's counts added up; the log line once 10 s have passed since the last) */
+static void obj_cache_flush(void) {
+    __atomic_store_n(&obj_cache_due, 0, __ATOMIC_RELAXED);
+    if (obj_cache_tl_made == 1) obj_cache_tl_made = 2, InterlockedIncrement64(&obj_cache_made);
+    InterlockedAdd64(&obj_cache_looks, (LONG64)obj_cache_tl_looks), InterlockedAdd64(&obj_cache_misses, (LONG64)obj_cache_tl_misses);
+    obj_cache_tl_looks = obj_cache_tl_misses = 0;
+    const int64_t now = hos_now_ns(), last = obj_cache_logged_ns;
+    if (now - last > 10000000000ll && InterlockedCompareExchange64(&obj_cache_logged_ns, now, last) == last) {
+        const int64_t l = InterlockedExchange64(&obj_cache_looks, 0), m = InterlockedExchange64(&obj_cache_misses, 0);
+        hos_log("sync: object cache (HOS_OBJ_CACHE=%d a thread, %lld made): %lld lookups, %lld missed (%.2f %%)",
+                __atomic_load_n(&obj_cache_size_logged, __ATOMIC_RELAXED), (long long)obj_cache_made, (long long)l,
+                (long long)m, l ? 100.0 * m / l : 0.0);
+    }
+}
 static Obj *obj_nockpt(uint64_t key, int kind) {
     /* (longshot: 128 still missed: obj_lookup was the busiest leaf in dense Kokiri, 3.2% of all samples, 4.3% of the instants when one
        thread alone ran; each actor has its own mutexes) */
     static _Thread_local struct { uint64_t key; Obj *o; } cache[1024];
-    static int off = -1;
+    static int off = -1, entries = -1;
     if (off < 0) off = env_on("HOS_NO_OBJ_CACHE");
+    if (entries < 0) entries = obj_cache_entries(getenv("HOS_OBJ_CACHE"));
+    if (!off && entries) return obj_lookup_cached(key, kind, entries);
     if (!off) {
         const unsigned i = (unsigned)((key * 0x9E3779B97F4A7C15ULL) >> 54);
         Obj *o = cache[i].o;
