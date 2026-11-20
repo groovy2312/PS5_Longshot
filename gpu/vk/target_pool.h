@@ -11,7 +11,11 @@
 
 namespace mkwvk::target_pool {
 
+#ifdef __PROSPERO__
+inline constexpr uint64_t kMinMB = 192, kMaxMB = 256;
+#else
 inline constexpr uint64_t kMinMB = 256, kMaxMB = 768;
+#endif
 
 /// The default bound in MB for a driver allowance of `allowed` bytes (0: not known, the minimum)
 inline uint64_t default_mb(uint64_t allowed) {

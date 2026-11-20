@@ -93,6 +93,10 @@ VmaPool target_images_pool() {
 // 40s whenever new ground came in. In the pool the sampled textures are made in and no other, 15% of the card's memory, 2 to 24 blocks,
 // none on an integrated GPU: vram_compact::blocks_at_start. RX_VK_IMAGE_PREALLOC=<blocks>: that many, 0: none)
 static size_t blocks_at_start(bool holds_textures) {
+#ifdef __PROSPERO__
+    (void)holds_textures;
+    return 0;
+#endif
     if (!holds_textures) return 0;
     uint64_t heap = 0;
     for (uint32_t h = 0; h < dev.memory.memoryHeapCount; h++)

@@ -56,7 +56,14 @@ inline bool kept_only(uint64_t block_bytes, uint64_t kept) { return kept && bloc
 /// to page to, so past the allowance the driver's own allocations fail. A UHD Graphics (i3-1115G4, 7.0 GB allowed) at 6.7 GB
 /// entered Hyrule Castle, its imports grew by 560 MB, and at 7.5 of 7.0 GB graphics pipelines were not made (-2) and the next
 /// vkCmdDispatchIndirect faulted inside igvk64.dll; 3% of the allowance is 215 MB of room, 10% is 717
-inline uint64_t count_line_pct(bool integrated) { return integrated ? 90 : 97; }
+inline uint64_t count_line_pct(bool integrated) {
+#ifdef __PROSPERO__
+    (void)integrated;
+    return 82;
+#else
+    return integrated ? 90 : 97;
+#endif
+}
 
 /// Whether VMA's blocks hold room enough (an eighth of the allowance free) that the count line's squeeze waits: new images take
 /// that space and the count does not grow. Not past the allowance, where a dedicated card's driver pages (#2156), and not on an
