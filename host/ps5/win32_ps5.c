@@ -1211,7 +1211,7 @@ static void notify_player(const char *text) {   /* (a notification on the consol
 }
 static uint64_t floor_bytes(void) {
     const char *e = getenv("HOS_PS5_MEM_FLOOR_MB");
-    return (e && *e ? strtoull(e, NULL, 10) : 192) << 20;
+    return (e && *e ? strtoull(e, NULL, 10) : 128) << 20;
 }
 static void ps5_write_crash_trace(const char *reason, uint64_t room_mb) {
     char buf[512];
@@ -1268,10 +1268,11 @@ static void *memory_floor_watch(void *unused) {
             hang_logged = 1;
             ps5_write_crash_trace("GPU_FREEZE_2S", room >> 20);
         }
-        if (room < floor + (2400ull << 20)) {
+        if (room < floor + (3200ull << 20)) {
             zone_boost_trigger();
         }
         if (room < floor) {
+            ps5_write_crash_trace("MEMORY_FLOOR_EXIT", room >> 20);
             int64_t at = 0;
             size_t largest = 0;
             sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0x10000, &at, &largest);
@@ -1305,7 +1306,7 @@ static void *memory_floor_watch(void *unused) {
             }
             hos_ps5_exit(3);
         }
-        sceKernelUsleep(room < floor + (2600ull << 20) ? 15000 : 150000);
+        sceKernelUsleep(room < floor + (3400ull << 20) ? 15000 : 150000);
     }
     return NULL;
 }

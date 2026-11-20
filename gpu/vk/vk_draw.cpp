@@ -7494,7 +7494,7 @@ void draw(VkCommandBuffer cmd, NvnState& s, const DrawArgs& d) {
     if (cp->key == 0x1a7482c0ec9991eaULL) {
         const int64_t prev_world = world_drawn_at.exchange(presents_now, std::memory_order_relaxed);
         const int64_t last_wheel = wheel_drawn_at.load(std::memory_order_relaxed);
-        if (prev_world > 0 && (presents_now - prev_world) >= 10 && (presents_now - last_wheel) > 10) {
+        if (prev_world > 0 && (presents_now - prev_world) >= 2 && (presents_now - last_wheel) > 10) {
             zone_boost_trigger();
         }
     }
