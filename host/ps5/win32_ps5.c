@@ -1222,7 +1222,7 @@ static void *memory_floor_watch(void *unused) {
             fprintf(stderr, "[ps5] memory floor: %llu MiB of direct memory free in %llu pieces (the title closes under %llu)\n",
                     (unsigned long long)(room >> 20), (unsigned long long)pieces, (unsigned long long)(floor >> 20));
         if (room < low) low = room;
-        if (room < floor + (1200ull << 20)) {
+        if (room < floor + (2400ull << 20)) {
             zone_boost_trigger();
         }
         if (room < floor) {
@@ -1259,7 +1259,7 @@ static void *memory_floor_watch(void *unused) {
             }
             hos_ps5_exit(3);
         }
-        sceKernelUsleep(room < (1ull << 30) ? 25000 : 250000);
+        sceKernelUsleep(room < floor + (2600ull << 20) ? 15000 : 150000);
     }
     return NULL;
 }
