@@ -807,6 +807,22 @@ people:
   d3zessete, chrispository, vzeol, leonidasmark, Segmentree, ShyVortex, hiKareeem and i900gaming, among others.
 
 
+### Optional: Enabling AMD FSR 4.1.2 (Lite) on PS5
+
+By default, **PS5 Longshot Plus** runs safely with **AMD FSR 3.1**. To unlock **AMD FSR 4.1.2 (Lite INT8)** automatically on PS5 (RDNA 2):
+
+1. **Download the precompiled shader package:**
+   - Go to [Mob1K7105/beamng-fsr4-linux Releases](https://github.com/Mob1K7105/beamng-fsr4-linux/releases) and download **`beamng-fsr4-linux-0.3.0.tar.gz`** (or the latest `beamng-fsr4-linux.tar.gz` release).
+2. **Extract the `lite` shader folder:**
+   - Unpack the `.tar.gz` archive on your computer (using 7-Zip, WinRAR, or `tar -xzf beamng-fsr4-linux-0.3.0.tar.gz`).
+   - Inside the extracted folder, locate the **`lite/`** directory containing the INT8 shader weights.
+3. **Copy to your PS5 via FTP:**
+   - Upload the `lite/` folder into your title directory so the final path on the console is:
+     `/data/homebrew/PPSA99198/fsr4/lite/`
+     *(Alternative path also supported: `/data/longshot/PPSA99198/fsr4/lite/`)*.
+4. **Launch the game:**
+   - **PS5 Longshot Plus** will automatically detect the `lite/` weights at startup and switch `Auto (This PS5)` to **AMD FSR 4** with `30%` sharpness.
+
 ### Known Issues & Playability Notes (PS5 Fat / Slim & Pro)
 
 * **Zone Transitions & Memory Relief:** During extended play sessions with frequent transitions entering and exiting areas (such as Hyrule Field, Kakariko Village, Graveyard, or Castle Town), the title may occasionally close preventively to protect system memory on base consoles (**PS5 Fat / Slim**). **Simply restarting the title from the PS5 home screen restores normal playability immediately** from your last save or autosave, as all previously compiled shaders remain cached.
