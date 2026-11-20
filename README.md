@@ -56,52 +56,24 @@ Longshot is a continuation of [Hookshot](https://github.com/NotRexed/Hookshot). 
 > need your own copy. Everything the build creates (`longshot.exe`, the generated code, the shader caches and your
 > saves) comes from your game and stays on your PC. Never share those files.
 
-## Custom Build Enhancements (`groovy2312` Fork)
+## Custom Build Enhancements (groovy2312 Fork — PS5 Longshot Plus)
 
-This custom fork integrates upstream PS5 improvements, pending stability Pull Requests, performance optimizations from `MagicBeanDev/Longshot`, and optional native Vulkan AMD FSR 4.1.2 support.
+This custom fork integrates upstream PS5 improvements, pending stability Pull Requests, performance optimizations from `MagicBeanDev/Longshot`, and custom enhancements tailored for PS5 stability and visual quality:
 
-### Integrated Pull Requests & Upstream Patches
+### Key Features & Improvements
+- **PS5 Longshot Plus Branding & Assets:** Updated title metadata (`LONGSHOT PLUS` across all locales in `sce_sys/param.json`), custom 512×512 emblem (`icon0.png`), updated splash screen (`PS5 LONGSHOT PLUS`), and Node 24 CI/CD workflows (`actions/*@v5`) with automatic `sce_sys/` cache invalidation.
+- **Smart `Auto (This PS5)` & AMD FSR 4.1.2 (Lite):** Automatically detects FSR 4.1.2 lite shader weights (`/data/longshot/PPSA99198/fsr4/lite/` or `/data/homebrew/PPSA99198/fsr4/lite/`) and activates **AMD FSR 4** with dynamic internal resolution, falling back safely to **AMD FSR 3.1** when absent.
+- **90-Second Dynamic Zone Boost (`zone_boost`):** Automatically drops output/internal resolution to `1280x720` (`75%` internal = `960x540` with FSR 4) for **90 seconds** (`RX_VK_ZONE_BOOST_SEC=90`) during area transitions or proactive 15 ms direct-memory polling (`< 2.4 GB` free) to prevent `CE-108255-1` freezes in open areas like Hyrule Field and Lon Lon Ranch, restoring native `1080p` afterward.
+- **Fast First-Boot Shaders & Base PS5 Memory Tuning:** Defaults to `RX_VK_COMPILE_SHADERS=most` and tuned ASTC limits (`RX_VK_TEX_MAX_DIM=256`, `RX_VK_TEX_SKIP_MB=1`, `RX_VK_WB_MAX_KB=1024`) in the PS5 / PS5 Slim profile.
+- **Unbuffered GPU Freeze & Crash Logger (`crash_trace.txt`):** Real-time `O_SYNC` watchdog and signal handler writing active shader `prog_key` and free direct memory straight to `/data/homebrew/PPSA99198/logs/crash_trace.txt` on 2-second GPU hangs or fatal signals.
+- **Upstream & Performance Merges:** Integrates PRs `#6`, `#23`, `#32`, `#33`, `#35`, `#41`, and `#44` from `heydemoura/PS5_Longshot`, plus precompiled pipeline state databases (`#1688`, `#1615`), native `memcpy`/`memset` hooks (`#1209`), and ThinLTO TLS coherence (`#755`) from `MagicBeanDev/Longshot`.
 
-* **Memory & Stability (`heydemoura/PS5_Longshot`):**
-  * **PR #6 & #23:** Guest page-table memory layout alignment and `HOS_SHADOW_BUCKET` tiered shadow memory reservation to prevent out-of-memory (OOM) crashes.
-  * **PR #32 & #33:** Early shader module memory release after boot and user profile separation.
-  * **PR #35:** Dedicated Title ID (`PPSA99025`) to avoid save/config conflicts with other homebrew ports (`reUndr`).
-  * **PR #44:** Per-user title subdirectories so multiple PS5 accounts keep separate saves.
-  * **PR #41:** Native Vulkan static compute-replay backend for **AMD FSR 4.1.2 (Lite / INT8)** (optional).
-* **Performance & Stutter Reduction (`MagicBeanDev/Longshot`):**
-  * **#1688 & #1615:** Expanded precompiled pipeline state database (12,001 pipelines + Hyrule Drawbridge scene states) to minimize first-visit shader compilation stutter.
-  * **#1209:** Native host `memcpy`/`memset` hooks spliced into the lifted SDK for lower CPU overhead.
-  * **#755:** Coherent TLS initialization under COFF ThinLTO.
+### Recommended `longshot_env.txt` Switches
+- `RX_VK_COMPILE_SHADERS=most` — Skips ~26,000 predicted pipelines on first boot for fast startup.
+- `RX_VK_ZONE_BOOST_SEC=90` — Duration in seconds of the automatic `720p / 75%` FSR 4 memory-relief window (default `90`).
+- `RX_VK_TEX_MAX_DIM=256` & `RX_VK_TEX_SKIP_MB=1` — Base PS5 (12 GB) texture mip limits to keep headroom for FSR 4.
+- `RX_VK_TASK_MESH_FALLBACK=1` — Optional compute fallback for task/mesh culling shaders on RDNA 2.
 
----
-
-### Enabling AMD FSR 4.1.2 (Optional)
-
-Due to licensing restrictions, **no AMD FidelityFX binary weights or SPIR-V shader modules are included in this repository**. If those files are not present on your console, the game safely hides the `AMD FSR 4` option and defaults to `AMD FSR 3.1`.
-
-#### 1. Folder Setup on PS5 (via FTP)
-To unlock **AMD FSR 4** in the in-game menu (`Touchpad Click + Options` → `Graphics` → `Upscaler`):
-1. Obtain the extracted FSR 4.1.2 `lite` shader asset set (`t1080_m0`, `t1080_m1`, `t2160_m0`, and `t2160_m1` with their respective `initializer.bin` and `.spv` files).
-2. Connect to your PS5 via FTP and create:
-   ```text
-   /data/longshot/PPSA99025/fsr4/lite/
-   ```
-   *(Alternatively, place it inside `/data/homebrew/PPSA99025/fsr4/lite/`).*
-3. Upload the four tier folders (`t1080_m0`, `t1080_m1`, `t2160_m0`, `t2160_m1`) inside `lite/`.
-4. Restart the game. **AMD FSR 4** will appear under **Graphics → Upscaler**.
-
-#### 2. Recommended PS5 Settings & Memory Tips (`longshot_env.txt`)
-* **Use Dynamic Internal Resolution (`Auto`):** Because FSR 4 requires ~136 MB of additional VRAM/workspace buffers, keeping **Render Resolution** on **Auto (Dynamic)** prevents out-of-memory crashes when transitioning between heavy areas (such as Kokiri Forest to Hyrule Field).
-* **Base PS5 (12 GB) Memory Tuning:** If you experience crashes when loading new areas on a base PS5 / Slim, add these lines to `/data/homebrew/PPSA99025/longshot_env.txt`:
-  ```ini
-  RX_VK_TEX_MAX_DIM=512
-  RX_VK_TEX_SKIP_MB=2
-  ```
-* **Optional FSR 4 Switches (`longshot_env.txt`):**
-  * `RX_VK_FSR4=0` — Force-disable FSR 4 even if the `fsr4/lite` folder is present.
-  * `RX_VK_FSR4_PORTABLE=1` — Force portable compute shaders if visual artifacts occur.
-
----
 
 ## Project status
 
