@@ -26,6 +26,7 @@ ABOUT = {
     3: "The long step: 30 to 60 minutes on a 6-core PC.",
     4: "Under a minute.",
     5: "A few seconds.",
+    6: "A few seconds.",
 }
 
 
@@ -283,7 +284,7 @@ class Window(QWidget):
                 l.setText("<span style='color:#2e9e5b'>✓</span> %s" % name)
             elif i == current:
                 mark = "<span style='color:#c0392b'>✗</span>" if failed else "<b>▸</b>"
-                l.setText("%s <b>%s</b> <span style='color:gray'>%s</span>" % (mark, name, "" if failed else ABOUT[i]))
+                l.setText("%s <b>%s</b> <span style='color:gray'>%s</span>" % (mark, name, "" if failed else ABOUT.get(i, "")))
             else:
                 l.setText("<span style='color:gray'>○ %s</span>" % name)
         self.current = current

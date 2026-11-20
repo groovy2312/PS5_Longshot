@@ -327,7 +327,7 @@ def title(kit, info, work, elf, native, out, model):
     # ---- the console's profile ----
     profile = MODELS[model]
     param = os.path.join(app, "sce_sys", "param.json")
-    j = json.load(open(param, encoding="utf-8"))
+    j = json.load(open(param, encoding="utf-8-sig"))
     j["attribute3"] = profile["attribute3"]
     with open(param, "w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(j, indent=2) + "\n")
@@ -453,6 +453,12 @@ def main():
     except Stop as e:
         say("@@error " + str(e).replace("\n", " | "))
         print(str(e), file=sys.stderr)
+        return 1
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        say("@@error " + str(e).replace("\n", " | "))
+        print(tb, file=sys.stderr)
         return 1
     return 0
 
