@@ -14,6 +14,8 @@
 #include <windows.h>
 
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <pthread_np.h>
 #include <signal.h>
