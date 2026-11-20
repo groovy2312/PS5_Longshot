@@ -1071,7 +1071,13 @@ void apply_auto() {
     opts.handheld = 0;   // (docked: the handheld profile gave a GTX 1050 a black picture; the Render resolution lightens the card)
     if (c.resolution) opts.resolution = ur::snap_render(c.upscaler, c.resolution);
 #ifdef __PROSPERO__
-    else if (c.upscaler == ::auto_settings::FSR4) opts.resolution = 0;
+    opts.aspect = 0;         // 16:9 (monitor)
+    opts.output_res = 0;     // 1920x1080 (native)
+    opts.handheld = 0;       // TV Mode (Modo TV)
+    opts.resolution = 0;     // Auto (dynamic internal resolution)
+    opts.sharpness = 30;     // 30% sharpness
+    opts.framegen = 2;       // 2x (game at 30 fps)
+    opts.framegen_by = fg_by::kMihawk; // MihawkGen
 #endif
     auto_tuned = 0;   // (chosen again: measured again in play)
     auto_tuning = {};
