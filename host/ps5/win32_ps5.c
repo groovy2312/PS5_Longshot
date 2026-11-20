@@ -1212,22 +1212,13 @@ static uint64_t floor_bytes(void) {
     return (e && *e ? strtoull(e, NULL, 10) : 192) << 20;
 }
 static void ps5_write_crash_trace(const char *reason, uint64_t room_mb) {
-    char buf[640];
+    char buf[512];
     uint64_t pkey = __atomic_load_n(&g_last_draw_key, __ATOMIC_RELAXED);
     int64_t pres = __atomic_load_n(&g_last_present_seen, __ATOMIC_RELAXED);
-    uint64_t k0 = __atomic_load_n(&g_last_stage_keys[0], __ATOMIC_RELAXED);
-    uint64_t k1 = __atomic_load_n(&g_last_stage_keys[1], __ATOMIC_RELAXED);
-    uint64_t k2 = __atomic_load_n(&g_last_stage_keys[2], __ATOMIC_RELAXED);
-    uint64_t k3 = __atomic_load_n(&g_last_stage_keys[3], __ATOMIC_RELAXED);
-    uint64_t k4 = __atomic_load_n(&g_last_stage_keys[4], __ATOMIC_RELAXED);
     int n = snprintf(buf, sizeof buf,
-        "[PS5-TRACE] %s | present=%lld | free_mem=%llu MiB | zone_boost=%d\n"
-        "  prog_key=%016llx\n"
-        "  stage_keys=%016llx,%016llx,%016llx,%016llx,%016llx\n",
+        "[PS5-TRACE] %s | present=%lld | free_mem=%llu MiB | zone_boost=%d | prog_key=%016llx\n",
         reason, (long long)pres, (unsigned long long)room_mb, zone_boost_active(),
-        (unsigned long long)pkey,
-        (unsigned long long)k0, (unsigned long long)k1, (unsigned long long)k2,
-        (unsigned long long)k3, (unsigned long long)k4);
+        (unsigned long long)pkey);
     if (n > 0) {
         int fd = open("/data/homebrew/PPSA99198/logs/crash_trace.txt", O_WRONLY | O_CREAT | O_APPEND | O_SYNC, 0666);
         if (fd < 0) fd = open("/data/longshot/PPSA99198/logs/crash_trace.txt", O_WRONLY | O_CREAT | O_APPEND | O_SYNC, 0666);

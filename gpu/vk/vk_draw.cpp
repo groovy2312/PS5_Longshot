@@ -7501,9 +7501,6 @@ void draw(VkCommandBuffer cmd, NvnState& s, const DrawArgs& d) {
     if (cp->key == 0x02ff9920c2571cc2ULL) wheel_drawn_at.store(presents_now, std::memory_order_relaxed);
     __atomic_store_n(&g_last_draw_key, cp->key, __ATOMIC_RELAXED);
     __atomic_store_n(&g_last_present_seen, presents_now, __ATOMIC_RELAXED);
-    for (int st_i = 0; st_i < 5; st_i++) {
-        __atomic_store_n(&g_last_stage_keys[st_i], s.stages[st_i].code_key, __ATOMIC_RELAXED);
-    }
     if (skip_live(cp->key)) return;   // (EvilOOT, RX_VK_SKIP_FILE)
     {   // (longshot, RX_VK_SKIP_PROG=<key prefix,...>: draws too, their native code keys logged once; =-: none)
         // (OoT's 53509044401d78d2, by default only while its targets have no view: 128 draws, once while an area loads, that render

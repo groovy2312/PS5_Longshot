@@ -15,7 +15,6 @@ static inline uint64_t zone_now_ms(void) {
 
 __attribute__((weak)) volatile uint64_t g_zone_boost_until_ms = 0;
 __attribute__((weak)) volatile uint64_t g_last_draw_key = 0;
-__attribute__((weak)) volatile uint64_t g_last_stage_keys[5] = {0, 0, 0, 0, 0};
 __attribute__((weak)) volatile int64_t  g_last_present_seen = 0;
 
 static inline void zone_boost_trigger(void) {
