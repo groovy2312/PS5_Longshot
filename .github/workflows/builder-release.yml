@@ -36,14 +36,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
           fetch-depth: 0
       - name: The packages the build needs
         run: sudo bash ps5/builder/build_kit.sh --install-packages
       - name: What an earlier run fetched and built
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .local/projects
@@ -56,13 +56,13 @@ jobs:
         run: bash ps5/builder/build_kit.sh
       - name: The logs, when it failed
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: kit-logs
           path: work/build-kit
       - name: Pack the kit
         run: tar -C dist -cf kit.tar kit
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: kit
           path: kit.tar
@@ -76,10 +76,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: kit
       - name: Unpack the kit
@@ -90,14 +90,14 @@ jobs:
         run: python3 -I ps5/builder/package.py --system linux-x64
       - name: Windows, the portable folder
         run: python3 -I ps5/builder/package.py --system windows-x64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: builder-linux
           path: |
             dist/builder/*.AppImage
             dist/builder/*.AppImage.sha256
           compression-level: 0
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: builder-windows
           path: |
@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: builder-linux
       - name: What a desktop has that a runner does not
@@ -131,7 +131,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: builder-windows
       - name: Unpack it, as a player does
@@ -163,7 +163,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: builder-*
           merge-multiple: true
