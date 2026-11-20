@@ -1,5 +1,4 @@
 #include "../../gpu/vk/zone_boost.h"
-volatile uint64_t g_zone_boost_until_ms = 0;
 /* PS5: the Win32 calls host/posix/win32_posix.c leaves to the console (host/ps5/win32_ps5.h): memory, thread and fiber
    stacks, futexes, modules and the process's exit. Built into the PS5 executable only (ps5/build.py).
 
