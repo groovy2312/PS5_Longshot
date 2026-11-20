@@ -5333,7 +5333,7 @@ bool intel_compiles_side_by_side() {   // (RX_VK_NO_INTEL_SERIAL in the row: men
 bool intel_quick_compute() { return opts.intel_quick != 0 && intel_compiler_row(); }   // (RX_VK_COMPUTE_QUICK_FIRST in it: menu_init)
 bool resolution_auto() { return !zone_boost_active() && opts.resolution == 0; }
 int resolution_scale() {
-    const float s = zone_boost_active() ? 0.50f : (upscaler_rows::percent(ur::snap_render(upscaler(), opts.resolution)) / 100.0f);
+    const float s = zone_boost_active() ? 0.75f : (upscaler_rows::percent(ur::snap_render(upscaler(), opts.resolution)) / 100.0f);
     return s > 0 ? (int)(twelfths(s) * 10000.0f / 12.0f + 0.5f) : 0;   // (the twelfth game_size labels)
 }
 
