@@ -1211,10 +1211,53 @@ static uint64_t floor_bytes(void) {
     const char *e = getenv("HOS_PS5_MEM_FLOOR_MB");
     return (e && *e ? strtoull(e, NULL, 10) : 192) << 20;
 }
+static void ps5_write_crash_trace(const char *reason, uint64_t room_mb) {
+    char buf[640];
+    uint64_t pkey = __atomic_load_n(&g_last_draw_key, __ATOMIC_RELAXED);
+    int64_t pres = __atomic_load_n(&g_last_present_seen, __ATOMIC_RELAXED);
+    uint64_t k0 = __atomic_load_n(&g_last_stage_keys[0], __ATOMIC_RELAXED);
+    uint64_t k1 = __atomic_load_n(&g_last_stage_keys[1], __ATOMIC_RELAXED);
+    uint64_t k2 = __atomic_load_n(&g_last_stage_keys[2], __ATOMIC_RELAXED);
+    uint64_t k3 = __atomic_load_n(&g_last_stage_keys[3], __ATOMIC_RELAXED);
+    uint64_t k4 = __atomic_load_n(&g_last_stage_keys[4], __ATOMIC_RELAXED);
+    int n = snprintf(buf, sizeof buf,
+        "[PS5-TRACE] %s | present=%lld | free_mem=%llu MiB | zone_boost=%d\n"
+        "  prog_key=%016llx\n"
+        "  stage_keys=%016llx,%016llx,%016llx,%016llx,%016llx\n",
+        reason, (long long)pres, (unsigned long long)room_mb, zone_boost_active(),
+        (unsigned long long)pkey,
+        (unsigned long long)k0, (unsigned long long)k1, (unsigned long long)k2,
+        (unsigned long long)k3, (unsigned long long)k4);
+    if (n > 0) {
+        int fd = open("/data/homebrew/PPSA99198/logs/crash_trace.txt", O_WRONLY | O_CREAT | O_APPEND | O_SYNC, 0666);
+        if (fd < 0) fd = open("/data/longshot/PPSA99198/logs/crash_trace.txt", O_WRONLY | O_CREAT | O_APPEND | O_SYNC, 0666);
+        if (fd >= 0) {
+            (void)write(fd, buf, (size_t)n);
+            close(fd);
+        }
+        hos_ps5_klog_now("%s", buf);
+    }
+}
+
+static void ps5_crash_sig_handler(int sig) {
+    char msg[64];
+    snprintf(msg, sizeof msg, "SIGNAL_%d", sig);
+    ps5_write_crash_trace(msg, 0);
+    _exit(128 + sig);
+}
+
 static void *memory_floor_watch(void *unused) {
     (void)unused;
     const uint64_t floor = floor_bytes();
-    uint64_t low = UINT64_MAX;   /* (the least seen, logged as it goes down past each 256 MiB under 1 GiB) */
+    uint64_t low = UINT64_MAX;
+    signal(SIGSEGV, ps5_crash_sig_handler);
+    signal(SIGABRT, ps5_crash_sig_handler);
+    signal(SIGBUS, ps5_crash_sig_handler);
+    signal(SIGILL, ps5_crash_sig_handler);
+    int64_t last_seen_p = 0;
+    uint64_t last_progress_ms = zone_now_ms();
+    int hang_logged = 0;
+    ps5_write_crash_trace("BOOT_WATCHDOG_ACTIVE", 0);
     for (;;) {
         uint64_t pieces = 0;
         const uint64_t room = direct_room_now(&pieces);
@@ -1222,6 +1265,16 @@ static void *memory_floor_watch(void *unused) {
             fprintf(stderr, "[ps5] memory floor: %llu MiB of direct memory free in %llu pieces (the title closes under %llu)\n",
                     (unsigned long long)(room >> 20), (unsigned long long)pieces, (unsigned long long)(floor >> 20));
         if (room < low) low = room;
+        int64_t cur_p = __atomic_load_n(&g_last_present_seen, __ATOMIC_RELAXED);
+        uint64_t now_t = zone_now_ms();
+        if (cur_p != last_seen_p) {
+            last_seen_p = cur_p;
+            last_progress_ms = now_t;
+            hang_logged = 0;
+        } else if (cur_p > 30 && !hang_logged && (now_t - last_progress_ms) >= 2000ULL) {
+            hang_logged = 1;
+            ps5_write_crash_trace("GPU_FREEZE_2S", room >> 20);
+        }
         if (room < floor + (2400ull << 20)) {
             zone_boost_trigger();
         }
