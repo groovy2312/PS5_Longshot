@@ -41,6 +41,7 @@
 #include "vk_dump.h"
 #include "vk_jobs.h"
 #include "texture_budget.h"
+#include "zone_boost.h"
 
 #include <span>
 
@@ -5029,7 +5030,7 @@ void texture_frame(uint64_t completed) {
     // (PS5) the textures made small while memory was short, made again at their own size while more than the reserve and a
     // quarter is free (ps5_tex_reserve): the most recently used first, two every ten presents. Not one the game has finalized
     // (its memory may hold something else by now), one the GPU wrote, or one recorded work may still read
-    if (hos_ps5_direct_room() > ps5_tex_reserve() / 4 * 5) {
+    if (!zone_boost_active() && hos_ps5_direct_room() > ps5_tex_reserve() / 4 * 5) {
         int n = 0;
         for (auto it = order.rbegin(); it != order.rend() && n < 2; ++it) {
             Texture* tex = it->second;
