@@ -4920,14 +4920,27 @@ void texture_frame(uint64_t completed) {
             if (frame_no - last < need_unused && !shifted) continue;
             if (shifted || drawn_over(tex)) hold_dead += tex->bytes + tex->pad;
         }
+#ifdef __PROSPERO__
+    const uint64_t ps5_room_now = hos_ps5_direct_room();
+    const bool ps5_emergency = ps5_room_now < (768ULL << 20);
+    const uint64_t ps5_emergency_goal = ps5_emergency ? ((1024ULL << 20) - ps5_room_now) : 0;
+    size_t ps5_emergency_evicted = 0;
+#else
+    const bool ps5_emergency = false;
+    const uint64_t ps5_emergency_goal = 0;
+    size_t ps5_emergency_evicted = 0;
+#endif
     for (auto& [last, tex] : order) {
         // (total_bytes can have drifted below the textures' sum (destroy_later clamps it): the chosen ones' bytes past it mean the
         // budget is met, not a wrapped difference that never is)
-        if ((!sweep && !by_hold && (pending_bytes >= total_bytes || total_bytes - pending_bytes <= budget / 8 * 7)) ||
-            frame_no - last < need_dead)
+        const bool budget_met = !sweep && !by_hold && (pending_bytes >= total_bytes || total_bytes - pending_bytes <= budget / 8 * 7);
+        const bool emergency_met = !ps5_emergency || pending_bytes >= ps5_emergency_goal || ps5_emergency_evicted >= 32;
+        if ((budget_met && emergency_met) ||
+            (!ps5_emergency && frame_no - last < need_dead) ||
+            (ps5_emergency && frame_no - last < 15))
             break;
         const bool shifted = drawn_over_shifted(tex);
-        if (frame_no - last < need_unused && !shifted) continue;   // (younger: only a dead transient target goes)
+        if (!ps5_emergency && frame_no - last < need_unused && !shifted) continue;   // (younger: only a dead transient target goes)
         if (tex->last_value > completed) continue;
         // (nor what the GPU wrote and the game still has: the image is its only copy, and one made again over that
         // storage started empty or from stale memory: a sky or course texture drawn once, garbage from then on.
@@ -4944,11 +4957,11 @@ void texture_frame(uint64_t completed) {
         // (longshot, RX_VK_COMPACT: the hold's pass, above. A live texture stays once the excess over its line is covered: the
         // reserve's line for one long unused, the hold's own for one unused ten seconds, and what the other rules ask (the 90%
         // rule, the budget's size, the driver's limit) for one unused as long as an eviction asks with the compaction off)
-        if (by_hold && !overwritten) {
+        if (!ps5_emergency && by_hold && !overwritten) {
             const uint64_t to = vram_compact::hold_target(frame_no - last, need_unused, rule_to, hold_to, evict_to);
             if (to == UINT64_MAX || vram_compact::hold_met(total_bytes, hold_live, hold_dead, to)) continue;
         }
-        if (finalized_kept && keep_finalized(tex)) {   // (above. Oldest first: beyond the cap the least recently used go)
+        if (!ps5_emergency && finalized_kept && keep_finalized(tex)) {   // (above. Oldest first: beyond the cap the least recently used go)
             if (finalized_kept <= keep_finalized_max) continue;
             finalized_kept -= tex->bytes;
             static int logged;
@@ -4957,7 +4970,7 @@ void texture_frame(uint64_t completed) {
                      (unsigned long long)(keep_finalized_max >> 20), tex->id, (unsigned long long)tex->gpu, tex->width,
                      tex->height, tex->nvn_format, (unsigned long long)(frame_no - last));
         }
-        if (!overwritten && tex->gpu_written && !tex->released && !evict_rendered && frame_no - last < keep_rendered) continue;
+        if (!ps5_emergency && !overwritten && tex->gpu_written && !tex->released && !evict_rendered && frame_no - last < keep_rendered) continue;
         if (sweep && !overwritten) continue;
         // (longshot) nor a live texture the GPU drew whose texels cannot be written back into its memory (ASTC kept as BC3, sparse,
         // past the write-back's size, ...): its image is the only copy, and one made again over that storage is not uploaded (the
@@ -4994,6 +5007,7 @@ void texture_frame(uint64_t completed) {
         static const bool no_flush = env_on("RX_VK_EVICT_NO_FLUSH");
         evict.push_back({tex, !no_flush && !overwritten && tex->gpu_written && !tex->released && flushable(*tex), shifted, overwritten});
         pending_bytes += tex->bytes + tex->pad;
+        if (ps5_emergency) ps5_emergency_evicted++;
         if (by_hold && !overwritten) hold_live += tex->bytes + tex->pad;
     }
     {   // (longshot) nor one whose storage another image was drawn into after its own last drawing (evict_reason.h's

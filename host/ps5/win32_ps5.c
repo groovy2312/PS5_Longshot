@@ -1211,7 +1211,7 @@ static void notify_player(const char *text) {   /* (a notification on the consol
 }
 static uint64_t floor_bytes(void) {
     const char *e = getenv("HOS_PS5_MEM_FLOOR_MB");
-    return (e && *e ? strtoull(e, NULL, 10) : 128) << 20;
+    return (e && *e ? strtoull(e, NULL, 10) : 220) << 20;
 }
 static void ps5_write_crash_trace(const char *reason, uint64_t room_mb) {
     char buf[512];
@@ -1235,7 +1235,7 @@ static void ps5_write_crash_trace(const char *reason, uint64_t room_mb) {
 static void ps5_crash_sig_handler(int sig) {
     char msg[64];
     snprintf(msg, sizeof msg, "SIGNAL_%d", sig);
-    ps5_write_crash_trace(msg, 0);
+    ps5_write_crash_trace(msg, __atomic_load_n(&g_ps5_free_mem_mb, __ATOMIC_RELAXED));
     _exit(128 + sig);
 }
 

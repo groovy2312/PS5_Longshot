@@ -32,10 +32,10 @@ static inline void zone_boost_trigger(void) {
 
 static inline void zone_boost_update_mem(uint64_t free_mb, uint64_t floor_mb) {
     __atomic_store_n(&g_ps5_free_mem_mb, free_mb, __ATOMIC_RELAXED);
-    if (free_mb < floor_mb + 1600ULL) {
+    if (free_mb < floor_mb + 2200ULL) {
         __atomic_store_n(&g_zone_boost_mem_hold, 1, __ATOMIC_RELAXED);
         zone_boost_trigger();
-    } else if (free_mb >= floor_mb + 2300ULL) {
+    } else if (free_mb >= floor_mb + 2900ULL) {
         __atomic_store_n(&g_zone_boost_mem_hold, 0, __ATOMIC_RELAXED);
     }
 }
