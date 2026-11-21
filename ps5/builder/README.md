@@ -7,7 +7,7 @@ A desktop tool: a player chooses their own game file and gets the PS5 title fold
 |---|---|
 | `build_kit.sh` | The kit from a fresh clone on Linux, with no game: fetches and builds RADV, FFmpeg, the SDK and the rest at pinned revisions, compiles the runtime and the renderer (`ps5/build.py --kit`), runs `make_kit.py`. |
 | `make_kit.py` | Lays the kit out in `dist/kit`: everything of the title that is not made from the game, compiled already. No game content. |
-| `pipeline.py` | The build: the game's program read out of the `.nup`, translated to C, compiled, linked with the kit, signed, laid out. Python only, the same on every system. `--game --out --model base|pro [--jobs]`; `--check` checks the builder's own parts with no game. |
+| `pipeline.py` | The build: the game's program read out of the `.nup`, translated to C, compiled, linked with the kit, signed, laid out. Python only, the same on every system. `--game --out --model base|pro [--memory GB] [--jobs N]`; `--check` checks the builder's own parts with no game. |
 | `app.py` | The window (PyQt6): game file, output folder, the console's model, Build, the five steps, a progress bar, the log, Stop, and Send to PS5 over FTP. Runs `pipeline.py` as a process. `--self-test` opens it and runs the check. |
 | `package.py` | The packages, both made on Linux: `--system linux-x64` an AppImage, `--system windows-x64` a portable folder in a zip (cross-built). python-build-standalone, llvm-mingw's LLVM (its clang has the PS5 target), `ps5-native-tool` and the lifter's helper library for the system, the kit. Every download is checked by SHA-256. |
 | `launcher.c` | Windows: `PS5LongshotPlusBuilder.exe`, the portable folder's start. No installer. |
@@ -33,6 +33,39 @@ artifacts: a rehearsal. No game file is used anywhere in it.
 
 The Windows package is a folder: unpack the zip anywhere and start `PS5LongshotPlusBuilder.exe`. It is not one file: the
 compiler, Python and the kit are 880 MB unpacked, and a single self-unpacking program would unpack them at every start.
+
+## Memory
+
+**Memory to use** in the window (`--memory GB`; Automatic: what is free, read again as the build goes) is what the build keeps
+to. Lower is slower, never different: the title folder made within 3 GB played the forest test on a Pro like the one built
+with all the memory (26.4 and 26.7 against 26.5 fps, the same free memory, no fault).
+
+Measured on Zelda's real game (`.nup`), the PSS of the builder and every process it starts, on a 16-thread Linux PC:
+
+| | v0.1.4 (Automatic) | now, Automatic | now, within 3 GB | now, within 2 GB |
+|---|---|---|---|---|
+| Translating it to C | 11.7 GB (7 workers; 5.05 GB with one) | 6.4 GB (9 workers, as the free memory allowed), 4 min | 1.83 GB, 9.5 min (one process) | 1.82 GB (one process) |
+| Compiling for the console | 16.5 GB, then a compiler killed for want of memory | 16.7 GB of the ~19 GB free, 16 min, none killed | 2.43 GB, 69 min (2 at once, parts of ~1.3 GB) | 1.94 GB, 121 min (1 at once, parts of ~0.9 GB) |
+| Linking, making the title folder (~1 minute) | 2.1-2.3 GB, then 3.0 GB for ~30 s | the same | the same | the same |
+| Listing the game's shaders | 1.1-1.3 GB | the same | the same | the same |
+| The whole build | stopped in the compile | 21 min | 81 min | 132 min |
+
+What changed:
+
+- **The translation** (`nx2/compact_bodies.py`): a64-kit's lifter held every function as a dict of its instructions, a dict
+  entry, a tuple and two ints for each of Zelda's 24 million: 3.4 GB of the 4.1 GB it held after finding the functions.
+  They are runs of addresses now, each instruction read from the image again when asked for; the lifted C and the image
+  are the same, byte for byte. Each further translation process is a forked copy that comes to own ~0.5-0.7 GB (Python's
+  reference counts write to the pages it shares), so within a budget under 5 GB it runs in one.
+- **The compile** (`pipeline.py` `compile_game`): one lifted file, `code_028.c`, is a single 10 MB function that took
+  4.3 GB and 408 s to compile; the giants are compiled cut into pieces (`nx2/split_giants.py`, as the PC build does:
+  721 MB, 145 s). A chunk (24 MB of C, ~1.6 GB) whose need is past what one compile may take is compiled as parts cut at
+  its functions' heads. A compile starts only when its need fits (`Gate`): within `--memory` with those running, else in
+  the memory free less 1.5 GB. One always runs.
+- **Not changed yet:** `ps5-native-tool` (PS5_Vulkan's `tooling/native`) holds the whole executable several times over:
+  `link` 2.8 GB, `self --sign` 3.1 GB, `--inspect` 2.1 GB for the 604 MB ELF, ~30 s in all. On a PC with 2 GB free that
+  much is paged for those seconds, as is the link's 2.3 GB (ld.lld). Making the native tool stream the file (sign keeps
+  the input, a copy of it, the output and a copy rebuilt from the output to hash) is the next step.
 
 ## The console's profile
 

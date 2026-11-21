@@ -22,8 +22,8 @@ STEPS = ["Reading the game's program", "Translating it to C", "Compiling for the
          "Listing the game's shaders"]
 ABOUT = {
     1: "A few seconds.",
-    2: "5 to 10 minutes. Uses about 6 GB of memory.",
-    3: "The long step: 30 to 60 minutes on a 6-core PC.",
+    2: "5 to 15 minutes. About 2 GB of memory, more to go faster where it is free.",
+    3: "The long step: 30 to 60 minutes on a 6-core PC; 1 to 2 hours with Memory to use at 2 or 3 GB.",
     4: "Under a minute.",
     5: "A few seconds.",
     6: "A few seconds.",
@@ -190,9 +190,18 @@ class Window(QWidget):
         self.jobs.setRange(0, 64)
         self.jobs.setSpecialValueText("Automatic")
         self.jobs.setValue(int(self.settings.value("jobs", 0)))
-        self.jobs.setToolTip("Files compiled at once. Automatic: by this computer's cores and free memory "
-                             "(each takes up to 1.4 GB). Lower it if the build is stopped for want of memory.")
+        self.jobs.setToolTip("Files compiled at once, at the most. Automatic: one fewer than this computer's cores; how many "
+                             "run is decided by the memory (Memory to use).")
         form.addRow("Compile at once", self.jobs)
+        self.memory = QComboBox()
+        self.memory.addItem("Automatic (what is free)", 0)
+        for gb in (2, 3, 4, 6, 8, 12, 16):
+            self.memory.addItem("%d GB" % gb, gb)
+        self.memory.setCurrentIndex(max(0, self.memory.findData(int(self.settings.value("memory", 0)))))
+        self.memory.setToolTip("The memory the build may take. Automatic: what is free, read again as it goes. A lower "
+                               "figure builds on a computer with little memory, more slowly: 2 GB works, with other "
+                               "programs closed. Choose lower if the build is stopped for want of memory.")
+        form.addRow("Memory to use", self.memory)
 
         self.steps = []
         steps_box = QVBoxLayout()
@@ -301,7 +310,7 @@ class Window(QWidget):
             self.out.setText(path)
 
     def busy(self, on):
-        for w in (self.game, self.out, self.jobs, self.model):
+        for w in (self.game, self.out, self.jobs, self.memory, self.model):
             w.setEnabled(not on)
         self.go.setText("Stop" if on else "Build")
 
@@ -323,7 +332,8 @@ class Window(QWidget):
         if not model:
             QMessageBox.warning(self, "No console", "Choose your console: PS5 / PS5 Slim, or PS5 Pro.")
             return
-        for k, v in (("game", game), ("out", out), ("jobs", self.jobs.value()), ("model", model)):
+        for k, v in (("game", game), ("out", out), ("jobs", self.jobs.value()), ("memory", self.memory.currentData()),
+                     ("model", model)):
             self.settings.setValue(k, v)
         os.makedirs(out, exist_ok=True)
         self.log.clear()
@@ -338,6 +348,8 @@ class Window(QWidget):
         args = ["-I", "-u", PIPELINE, "--game", game, "--out", out, "--model", model]
         if self.jobs.value():
             args += ["--jobs", str(self.jobs.value())]
+        if self.memory.currentData():
+            args += ["--memory", str(self.memory.currentData())]
         self.error = ""
         self.proc = Build(args)
         self.proc.line.connect(self.line)

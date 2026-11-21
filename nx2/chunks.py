@@ -299,7 +299,8 @@ def write(L, gen_dir, img_dir, rechunk=False, counters=(), jobs=None, took=None)
         starts = seed_from_gen(gen_dir)
     b = Boundaries(a64_lift.CHUNK_BYTES, starts, L.funcs)
     plain = _plain(L)   # (before L.emit_function is set below)
-    base_emit = L.emit_function
+    import compact_bodies
+    base_emit = compact_bodies.dict_bodies(L, L.emit_function)   # (one function's body a dict while it is emitted)
     jobs = emit_jobs() if jobs is None else jobs
     made = None
     procs = 1   # (what ran: the gate below may decline the processes)

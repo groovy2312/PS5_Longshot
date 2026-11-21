@@ -113,14 +113,29 @@ def available_gb():
     return None
 
 
+# The build's memory (measured on Zelda's real game with the kit's tools, the processes' PSS summed). The translation in one
+# process: 1.85 GB at its peak (nx2/compact_bodies.py; 5.05 GB before). Each further process is a forked copy that comes to own
+# ~0.5-0.7 GB of it (Python's reference counts write to the shared pages: the instruction texts every worker reads), and with
+# several there is one more beside them (chunks.start_side): 7 took 5.6 GB (11.7 GB before, with 8). The compile: mem_need, Gate
+MIN_MEMORY_GB = 2     # (--memory's least: the translation in one process; compiles of ~0.9 GB, one at a time)
+MIN_FREE_GB = 4       # (below this free at the start, a note)
+# (on Windows the workers are new processes holding the emit's tables and their run's functions: up to 395 MB each, measured in
+# nx2/chunks.py file_jobs)
+LIFT_ONE_GB, LIFT_MORE_GB = 2.0, (0.5 if os.name == "nt" else 0.75)
+
+
+def lift_processes(memory_gb):
+    """The translation's processes within memory_gb (0: the lifter's own rule, by the memory free): n workers and the side process
+    beside them, each LIFT_MORE_GB, over the one process's LIFT_ONE_GB; one where two would not fit"""
+    if not memory_gb:
+        return 0
+    n = int((memory_gb - LIFT_ONE_GB) / LIFT_MORE_GB) - 1
+    return max(1, min((os.cpu_count() or 2) - 1, n)) if n >= 2 else 1
+
+
 def default_jobs():
-    """Compiles at once: the cores less one, and no more than one for each 1.6 GB of memory free (a chunk's compile
-    took up to 1.4 GB)"""
-    n = max(1, (os.cpu_count() or 2) - 1)
-    gb = available_gb()
-    if gb:
-        n = max(1, min(n, int(gb / 1.6)))
-    return n
+    """Compiles at once at the most: the cores less one (how many run is the memory's call: Gate)"""
+    return max(1, (os.cpu_count() or 2) - 1)
 
 
 def run(cmd, env=None, cwd=None, what=None):
@@ -202,9 +217,134 @@ def lift(kit, work, exefs, lift_jobs):
     return gen
 
 
-def compile_game(kit, info, work, gen, clang, jobs):
+# The compile's memory. What one compile takes at its peak, a little over (nx2/build.py mem_need's rule, measured again here with the
+# kit's clang 23 for the PS5 at -O1): 0.4 GB + 50 MB per MB of C + 250 MB per MB of its largest function. The lift's chunks are
+# ~24 MB of small functions (1.6-1.7 GB each); a few hold one giant function, and code_028.c's 10 MB one took 4.3 GB alone, more
+# than many PCs had free. So:
+#   - the giants are compiled cut into pieces (nx2/split_giants.py, as the PC build has done since issue 418's time: 721 MB, and
+#     faster, for that file);
+#   - a chunk whose need is past what one compile may take (MEMORY_CAP: --memory, else the memory free at the start) is compiled
+#     as parts cut at its functions' heads (each part: the chunk's head, its declarations, then a run of its functions; nothing
+#     else stands between the lifted functions, so each part is complete C and the objects together are the chunk's);
+#   - a compile starts only when its need fits: within --memory with those running, else in the memory free now less what the
+#     running ones may still take and RESERVE_MB (one always runs).
+RESERVE_MB = 1536
+MIN_PART_MB = 900   # (the least a part is cut to: 0.4 GB + ~10 MB of C)
+SELF_MB = 400       # (this process, with a part's texts in hand, and the estimates' slack: 2 x 1.4 GB measured 3.08 GB with 300)
+COMPILED = "game_%s.o"
+
+
+def mem_need(text):
+    """A lifted C text's compile peak in MB (after split_giants: its pieces are functions of their own)"""
+    import lifted_c
+    starts = [m.start() for m in lifted_c.HEAD_BYTES.finditer(text)]
+    i = text.find(b"\nstatic __attribute__((noinline)) uintptr_t s_")
+    while i >= 0:
+        starts.append(i)
+        i = text.find(b"\nstatic __attribute__((noinline)) uintptr_t s_", i + 1)
+    starts = sorted(starts) + [len(text)]
+    largest = max([b - a for a, b in zip(starts, starts[1:])] or [0])
+    return int(400 + 50 * len(text) / (1 << 20) + 250 * largest / (1 << 20))
+
+
+def cut_parts(text, cap_mb, giant_bytes):
+    """Where to cut text (a lifted chunk, as the lift wrote it) so that each part's need is within cap_mb where the functions allow:
+    [(start, end, need)], each part being the head (all before the first function) and text[start:end], a run of whole functions.
+    A function of giant_bytes or more is counted at its pieces' size (split_giants cuts it as the part is compiled).
+    [(0, len(text), need)]: compiled whole"""
+    import lifted_c
+    marks = [m.start() for m in lifted_c.HEAD_BYTES.finditer(text)]
+    head = marks[0] if marks else 0
+    bounds = marks + [len(text)]
+    sizes = [y - x for x, y in zip(bounds, bounds[1:])]
+    counted = [n if n < giant_bytes else 64 << 10 for n in sizes]
+    need = lambda nbytes, largest: int(400 + 50 * (head + nbytes) / (1 << 20) + 250 * largest / (1 << 20))
+    whole = need(sum(sizes), max(counted or [0]))
+    if len(marks) < 2 or not cap_mb or whole <= cap_mb:
+        return [(0, len(text), whole)]
+    parts, first, nbytes, largest = [], 0, 0, 0
+    for i, (n, c) in enumerate(zip(sizes, counted)):
+        if i > first and need(nbytes + n, max(largest, c)) > cap_mb:
+            parts.append((marks[first], marks[i], need(nbytes, largest)))
+            first, nbytes, largest = i, 0, 0
+        nbytes += n
+        largest = max(largest, c)
+    parts.append((marks[first], len(text), need(nbytes, largest)))
+    return parts
+
+
+class Gate:
+    """Compiles started by memory: within limit_mb with those running (--memory), else by the memory free now"""
+
+    def __init__(self, limit_mb):
+        import threading
+        self.cv = threading.Condition()
+        self.limit = limit_mb
+        self.running = {}   # (lease: [need, Popen or None])
+        self.queue = []     # (the compiles waiting, in the order they came: the largest first, none passed by smaller ones)
+
+    def fits(self, need):
+        if self.limit:
+            return sum(n for n, _ in self.running.values()) + need <= self.limit
+        free = available_gb()
+        if free is None:
+            return True
+        owed = sum(max(0, n - rss_mb(p)) for n, p in self.running.values())
+        return free * 1024 - owed - RESERVE_MB >= need
+
+    def enter(self, need):
+        with self.cv:
+            lease = object()
+            self.queue.append(lease)
+            while self.queue[0] is not lease or (self.running and not self.fits(need)):
+                self.cv.wait(1.0)
+            self.queue.pop(0)
+            self.running[lease] = [need, None]
+            self.cv.notify_all()
+            return lease
+
+    def started(self, lease, proc):
+        with self.cv:
+            self.running[lease][1] = proc
+
+    def leave(self, lease):
+        with self.cv:
+            self.running.pop(lease, None)
+            self.cv.notify_all()
+
+
+def rss_mb(proc):
+    """a running compiler's resident memory in MB (0: not known; Linux only: elsewhere its whole need is counted as owed)"""
+    if proc is None or proc.poll() is not None:
+        return 0
+    try:
+        with open("/proc/%d/statm" % proc.pid) as f:
+            return (int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")) >> 20
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
+def make_part(nx2, path, lo, hi, out):
+    """(--make-part, a process of its own) the C a chunk's compile job compiles, written to out: its part (the chunk's head and
+    text[lo:hi], a run of its functions; hi -1: the whole chunk) with its giants split"""
+    sys.path.insert(0, nx2)
+    import lifted_c
+    import split_giants
+    with open(path, "rb") as f:
+        text = f.read()
+    if lo or hi >= 0:
+        m = lifted_c.HEAD_BYTES.search(text)
+        text = text[:m.start() if m else 0] + text[lo:hi if hi >= 0 else len(text)]
+    split, st = split_giants.split_text(text.decode("utf-8"), split_giants.PIECE_KB)
+    with open(out, "wb") as f:
+        f.write(split.encode("utf-8") if st["functions_split"] else text)
+
+
+def compile_game(kit, info, work, gen, clang, jobs, memory_gb=0):
     step(3)
     src, env = python_env(kit, work)
+    sys.path.insert(0, os.path.join(src, "nx2"))
+    import split_giants
     rt64 = os.path.join(work, "rt64")
     # (the 64-bit guest window's runtime header and a64_rt.c: nx2/rtgen.py, as ps5/build.py makes them)
     run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import rtgen; rtgen.write(sys.argv[2])",
@@ -212,48 +352,99 @@ def compile_game(kit, info, work, gen, clang, jobs):
     place = lambda a: a.replace("{kit}", kit).replace("{rt64}", rt64).replace("{gen}", gen)
     flags = [place(a) for a in info["target_flags"] + info["game_flags"]]
     chunks = sorted(f for f in os.listdir(gen) if f.startswith("code_") and f.endswith(".c"))
-    sources = [os.path.join(gen, c) for c in chunks] + [os.path.join(gen, f) for f in info["game_files"]] + \
-        [os.path.join(rt64, "a64_rt.c")]
+    others = [os.path.join(gen, f) for f in info["game_files"]] + [os.path.join(rt64, "a64_rt.c")]
     obj_dir = os.path.join(work, "obj")
+    cut_dir = os.path.join(work, "cut")   # (the compiled copies of the chunks: giants split, parts cut; removed after each)
     os.makedirs(obj_dir, exist_ok=True)
+    os.makedirs(cut_dir, exist_ok=True)
     version = subprocess.run([clang, "--version"], capture_output=True, text=True).stdout.splitlines()[0]
-    say("compiler: %s; %d files, %d at once" % (version, len(sources), jobs))
+    # (within --memory: the compiles' share is what this process leaves, and the parts are cut to half of it, so two run at once:
+    # a part's fixed 0.4 GB makes smaller ones slower in all. Else a chunk is cut only where it does not fit in the memory free)
+    limit = max(MIN_PART_MB, memory_gb * 1024 - SELF_MB) if memory_gb else 0
+    free = available_gb()
+    cap = max(MIN_PART_MB, int(limit / 2 if limit else (free * 1024 - RESERVE_MB if free else 0))) if (limit or free) else 0
     heads = hashlib.sha1()
     for d in (rt64, os.path.join(kit, "src", "third_party", "a64-kit", "rt"), os.path.join(kit, "src", "nx2", "rt"), gen):
         for f in sorted(os.listdir(d)):
             if f.endswith(".h"):
                 heads.update(f.encode() + open(os.path.join(d, f), "rb").read())
-    base = hashlib.sha1((" ".join(info["target_flags"] + info["game_flags"]) + version).encode() + heads.digest()).hexdigest()
+    base = hashlib.sha1((" ".join(info["target_flags"] + info["game_flags"]) + version + split_giants.flag()).encode() +
+                        heads.digest()).hexdigest()
 
-    def one(s):
-        obj = os.path.join(obj_dir, "game_" + os.path.basename(s)[:-2] + ".o")
+    # (each job: (name, its file, (start, end) of a chunk's part or None for a file compiled as it is, its need). Only offsets are
+    # held: a part is read from its chunk when it is compiled, so this process holds no more than the compiles' own texts)
+    jobs_list = []
+    for c in chunks:
+        with open(os.path.join(gen, c), "rb") as f:
+            text = f.read()
+        parts = cut_parts(text, cap, split_giants.MIN_KB * 1024)
+        for i, (lo, hi, need) in enumerate(parts):
+            jobs_list.append((c[:-2] + ("" if len(parts) == 1 else "_p%d" % i), os.path.join(gen, c),
+                              (lo, hi) if len(parts) > 1 else (0, None), need))
+        del text
+    for s in others:
+        # (the lift's other files: a64_table.c, 16 MB, took 589 MB; the rest ~50 MB)
+        jobs_list.append((os.path.basename(s)[:-2], s, None, int(400 + 15 * os.path.getsize(s) / (1 << 20))))
+    biggest = max(n for _, _, _, n in jobs_list)
+    say("compiler: %s; %d files (%d chunks), up to %d at once%s; the largest compile takes ~%.1f GB" % (
+        version, len(jobs_list), len(chunks), jobs, " within %.1f GB" % memory_gb if memory_gb else " as the free memory allows",
+        biggest / 1024))
+    gate = Gate(limit)
+    for f in os.listdir(obj_dir):   # (objects of an earlier build's other cut: not this build's)
+        if f.endswith(".o") and f[:-2] not in {COMPILED[:-2] % n for n, _, _, _ in jobs_list}:
+            for g in (f, f + ".key"):
+                if os.path.exists(os.path.join(obj_dir, g)):
+                    os.remove(os.path.join(obj_dir, g))
+
+    def one(job):
+        name, path, span, need = job
+        obj = os.path.join(obj_dir, COMPILED % name)
         h = hashlib.sha1(base.encode())
-        with open(s, "rb") as f:
+        h.update(repr(span).encode())
+        with open(path, "rb") as f:
             for block in iter(lambda: f.read(1 << 20), b""):
                 h.update(block)
         key, stamp = h.hexdigest(), obj + ".key"
         if os.path.exists(obj) and os.path.exists(stamp) and open(stamp).read() == key:
             return obj, None
-        r = subprocess.run([clang] + flags + ["-c", s, "-o", obj], capture_output=True, text=True, errors="replace")
-        if r.returncode:
-            return obj, "%s: exit %d\n%s" % (os.path.basename(s), r.returncode, (r.stdout + r.stderr)[-3000:])
+        lease = gate.enter(need)
+        copy = None
+        try:
+            if span is not None:   # (made by a process of its own: cutting a giant's lines takes this one's memory for good)
+                copy = os.path.join(cut_dir, name + ".c")
+                r = subprocess.run([sys.executable, "-I", os.path.abspath(__file__), "--make-part", os.path.join(src, "nx2"), path,
+                                    str(span[0]), str(-1 if span[1] is None else span[1]), copy], capture_output=True, text=True)
+                if r.returncode:
+                    return obj, "%s: making its copy failed (exit %d)\n%s" % (name, r.returncode, (r.stdout + r.stderr)[-3000:])
+            p = subprocess.Popen([clang] + flags + ["-c", copy or path, "-o", obj], stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, errors="replace")
+            gate.started(lease, p)
+            out, _ = p.communicate()
+        finally:
+            gate.leave(lease)
+            if copy and os.path.exists(copy):
+                os.remove(copy)
+        if p.returncode:
+            return obj, "%s: exit %d\n%s" % (name, p.returncode, out[-3000:])
         open(stamp, "w").write(key)
         return obj, None
 
-    sources.sort(key=lambda s: -os.path.getsize(s))   # (the longest first, so none is left alone at the end)
+    jobs_list.sort(key=lambda j: -j[3])   # (the largest first, so none is left alone at the end)
     objects, failed, done, t0 = [], [], 0, time.time()
-    say("@@progress 0 %d" % len(sources))
+    say("@@progress 0 %d" % len(jobs_list))
     with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
-        for obj, err in pool.map(one, sources):
+        for future in concurrent.futures.as_completed([pool.submit(one, j) for j in jobs_list]):
+            obj, err = future.result()
             done += 1
             objects.append(obj)
             if err:
                 failed.append(err)
                 say(err)
-            say("@@progress %d %d" % (done, len(sources)))
+            say("@@progress %d %d" % (done, len(jobs_list)))
     if failed:
-        hint = " A compiler stopped by the system (exit -9 or 137) wants fewer at once: --jobs." if any("exit -9" in e or "exit 137" in e for e in failed) else ""
-        raise Stop("%d of %d files did not compile.%s" % (len(failed), len(sources), hint))
+        hint = (" A compiler stopped by the system (exit -9 or 137) wants less memory: set Memory to use lower (--memory)."
+                if any("exit -9" in e or "exit 137" in e for e in failed) else "")
+        raise Stop("%d of %d files did not compile.%s" % (len(failed), len(jobs_list), hint))
     say("compiled in %.0f s" % (time.time() - t0))
     return objects
 
@@ -421,11 +612,14 @@ def build(a):
     if free < 6:
         raise Stop("the work folder's disk has %.1f GB free: the build wants 6 GB" % free)
     gb = available_gb()
-    if gb is not None and gb < 8:
-        say("note: %.1f GB of memory is free; the translation alone holds about 6 GB. Close other programs if it stops." % gb)
+    if a.memory:
+        say("memory: the build keeps to about %.1f GB%s" % (a.memory, "" if gb is None else " (%.1f GB is free now)" % gb))
+    elif gb is not None and gb < MIN_FREE_GB:
+        say("note: %.1f GB of memory is free; the build wants about %.0f GB at the least. Close other programs if it stops."
+            % (gb, MIN_FREE_GB))
     exefs = read_game(kit, work, a.game)
-    gen = lift(kit, work, exefs, a.lift_jobs)
-    objects = compile_game(kit, info, work, gen, clang, a.jobs or default_jobs())
+    gen = lift(kit, work, exefs, a.lift_jobs or lift_processes(a.memory))
+    objects = compile_game(kit, info, work, gen, clang, a.jobs or default_jobs(), a.memory)
     elf = link(kit, info, work, objects, lld, nm)
     app = title(kit, info, work, elf, native, out, a.model)
     shader_lists(kit, work, a.game, app)
@@ -434,6 +628,10 @@ def build(a):
 
 
 def main():
+    if sys.argv[1:2] == ["--make-part"]:
+        nx2, path, lo, hi, out = sys.argv[2:7]
+        make_part(nx2, path, int(lo), int(hi), out)
+        return 0
     ap = argparse.ArgumentParser(description="PS5 Longshot Plus Builder: the PS5 title folder from your own game file")
     ap.add_argument("--check", action="store_true", help="check the builder's own parts on this PC (no game is needed), and stop")
     ap.add_argument("--game", help="the game: a .nup file, or a folder with its exefs")
@@ -445,9 +643,14 @@ def main():
     ap.add_argument("--work", help="the build's own files (default: <out>/longshot-ps5-work); kept, so a second build is short")
     ap.add_argument("--jobs", type=int, default=0, help="compiles at once (default: by the cores and the memory free)")
     ap.add_argument("--lift-jobs", type=int, default=0, help="the translation's processes (default: the lifter's own rule)")
+    ap.add_argument("--memory", type=float, default=0,
+                    help="GB of memory the build may use (default: as much as is free). Lower is slower; %.0f at the least"
+                    % MIN_MEMORY_GB)
     a = ap.parse_args()
     if not a.check and not (a.game and a.out and a.model):
         ap.error("--game, --out and --model are needed (or --check)")
+    if a.memory and a.memory < MIN_MEMORY_GB:
+        ap.error("--memory: %.0f GB at the least" % MIN_MEMORY_GB)
     try:
         check(a) if a.check else build(a)
     except Stop as e:

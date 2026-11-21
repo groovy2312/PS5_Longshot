@@ -131,7 +131,7 @@ change it). This repository does not explain how to set that up.
 | | |
 |---|---|
 | **System** | 64-bit Windows 10 or 11, or 64-bit Linux with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora, Arch, SteamOS). |
-| **Memory** | About 10 GB free while it builds. The translation alone holds about 6 GB. |
+| **Memory** | 2 GB free at the least: set **Memory to use** to what your computer has free (2 or 3 GB on an 8 GB computer). Less memory takes longer: measured 81 minutes within 3 GB and 132 within 2 GB on a 16-thread PC. **Automatic** takes what is free and builds faster with more. |
 | **Storage** | About 6 GB free where you build, and 1 GB for the builder itself. |
 | **Time** | 40 to 70 minutes on a 6-core computer, most of it the compile step. A second build for the other console model takes seconds. |
 | **Internet** | Only to download the builder. The build itself downloads nothing. |
@@ -224,7 +224,8 @@ network. The title on the console does not look for updates.
 ### If something goes wrong
 
 - **The build stops in "Translating it to C" or "Compiling for the console" with no clear error:** it ran out of
-  memory. Close other programs; for the compile step, lower **Compile at once** (each file takes up to 1.4 GB).
+  memory. Close other programs and set **Memory to use** lower (2 GB is the least), then Build again: it goes on from
+  where it stopped.
 - **"the game file gave no program":** the file is not the supported game and version, or is not a `.nup`.
 - **Linux, the AppImage does not start:** it needs FUSE (`libfuse2` on Ubuntu and Debian), or start it with
   `--appimage-extract-and-run`.
