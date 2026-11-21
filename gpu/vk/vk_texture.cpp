@@ -4923,11 +4923,13 @@ void texture_frame(uint64_t completed) {
         }
 #ifdef __PROSPERO__
     const uint64_t ps5_room_now = hos_ps5_direct_room();
-    const bool ps5_emergency = ps5_room_now < (768ULL << 20);
-    const uint64_t ps5_emergency_goal = ps5_emergency ? ((1024ULL << 20) - ps5_room_now) : 0;
+    const bool ps5_emergency = ps5_room_now < (1152ULL << 20);
+    const bool ps5_critical = ps5_room_now < (512ULL << 20);
+    const uint64_t ps5_emergency_goal = ps5_emergency ? ((1408ULL << 20) - ps5_room_now) : 0;
     size_t ps5_emergency_evicted = 0;
 #else
     const bool ps5_emergency = false;
+    const bool ps5_critical = false;
     const uint64_t ps5_emergency_goal = 0;
     size_t ps5_emergency_evicted = 0;
 #endif
@@ -4980,7 +4982,7 @@ void texture_frame(uint64_t completed) {
         // before. On by default since 2026-11-09 (8 GB RTX 3070s still showed rainbow textures once VRAM filled, Discord): the VRAM it
         // costs is bounded (256 MB a texture) and a wrong texture is worse than a fuller budget. RX_VK_EVICT_UNFLUSHABLE=1: evicted, as before
         static const bool evict_unflushable = getenv("RX_VK_EVICT_UNFLUSHABLE") && atoi(getenv("RX_VK_EVICT_UNFLUSHABLE")) != 0;
-        if (!overwritten && tex->gpu_written && !tex->released && !evict_unflushable && tex->bytes < (256ull << 20) && !flushable(*tex)) {
+        if (!(ps5_critical && frame_no - last > 300) && !overwritten && tex->gpu_written && !tex->released && !evict_unflushable && tex->bytes < (256ull << 20) && !flushable(*tex)) {
             static std::atomic<int> kept_logged{0};
             if (kept_logged.fetch_add(1) < 40)
                 logf("vk: texture #%u %#llx %ux%u x%u NVN %#x the GPU drew kept, not evicted: its texels cannot be written back",
@@ -4993,7 +4995,7 @@ void texture_frame(uint64_t completed) {
         // (a render target, drawn in the frames it was used in, goes: the dynamic resolution makes a new set of ~20 at
         // each size, and the old ones are not used again)
         const bool drawn_once = tex->last_written + 8 < tex->last_frame;
-        if (!overwritten && tex->gpu_written && !tex->released && !evict_rendered && tex->bytes < (64ull << 20) && drawn_once) continue;
+        if (!(ps5_critical && frame_no - last > 300) && !overwritten && tex->gpu_written && !tex->released && !evict_rendered && tex->bytes < (64ull << 20) && drawn_once) continue;
         // (nor a small one the GPU wrote in one frame alone: a table the game bakes once and samples now and then. The
         // pause screen's colour grading, 8 x 8 x 8, its slices drawn at boot and sampled next when the game is paused,
         // went after a minute unused, and the one made again over storage only the GPU had written stayed empty: the
