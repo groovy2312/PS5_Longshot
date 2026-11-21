@@ -1268,9 +1268,7 @@ static void *memory_floor_watch(void *unused) {
             hang_logged = 1;
             ps5_write_crash_trace("GPU_FREEZE_2S", room >> 20);
         }
-        if (room < floor + (1400ull << 20)) {
-            zone_boost_trigger();
-        }
+        zone_boost_update_mem(room >> 20, floor >> 20);
         if (room < floor) {
             ps5_write_crash_trace("MEMORY_FLOOR_EXIT", room >> 20);
             int64_t at = 0;

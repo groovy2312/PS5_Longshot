@@ -80,7 +80,7 @@ namespace mkwvk {
 // renderer's largest kind and the only one a level may be left out of, is made at 128 texels at most (32 below half of it),
 // and evict_textures makes it again at its own size once more than the reserve and a quarter is free.
 uint64_t ps5_tex_reserve() {   // (vk_vma.cpp asks too)
-    static const uint64_t v = (uint64_t)(getenv("HOS_PS5_TEX_RESERVE_MB") ? atoi(getenv("HOS_PS5_TEX_RESERVE_MB")) : 1024) << 20;
+    static const uint64_t v = (uint64_t)(getenv("HOS_PS5_TEX_RESERVE_MB") ? atoi(getenv("HOS_PS5_TEX_RESERVE_MB")) : 2200) << 20;
     return v;
 }
 static std::atomic<uint64_t> ps5_pressed_n{0}, ps5_restored_n{0};

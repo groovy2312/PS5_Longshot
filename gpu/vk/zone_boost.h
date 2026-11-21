@@ -16,6 +16,8 @@ static inline uint64_t zone_now_ms(void) {
 __attribute__((weak)) volatile uint64_t g_zone_boost_until_ms = 0;
 __attribute__((weak)) volatile uint64_t g_last_draw_key = 0;
 __attribute__((weak)) volatile int64_t  g_last_present_seen = 0;
+__attribute__((weak)) volatile uint64_t g_ps5_free_mem_mb = 0;
+__attribute__((weak)) volatile int      g_zone_boost_mem_hold = 0;
 
 static inline void zone_boost_trigger(void) {
     const char *sec_env = getenv("RX_VK_ZONE_BOOST_SEC");
@@ -28,12 +30,24 @@ static inline void zone_boost_trigger(void) {
     }
 }
 
+static inline void zone_boost_update_mem(uint64_t free_mb, uint64_t floor_mb) {
+    __atomic_store_n(&g_ps5_free_mem_mb, free_mb, __ATOMIC_RELAXED);
+    if (free_mb < floor_mb + 1600ULL) {
+        __atomic_store_n(&g_zone_boost_mem_hold, 1, __ATOMIC_RELAXED);
+        zone_boost_trigger();
+    } else if (free_mb >= floor_mb + 2300ULL) {
+        __atomic_store_n(&g_zone_boost_mem_hold, 0, __ATOMIC_RELAXED);
+    }
+}
+
 static inline int zone_boost_active(void) {
     uint64_t until = __atomic_load_n(&g_zone_boost_until_ms, __ATOMIC_RELAXED);
-    if (until == 0) return 0;
-    if (zone_now_ms() < until) return 1;
-    __atomic_store_n(&g_zone_boost_until_ms, 0, __ATOMIC_RELAXED);
-    return 0;
+    int hold = __atomic_load_n(&g_zone_boost_mem_hold, __ATOMIC_RELAXED);
+    if (until != 0) {
+        if (zone_now_ms() < until) return 1;
+        __atomic_store_n(&g_zone_boost_until_ms, 0, __ATOMIC_RELAXED);
+    }
+    return hold ? 1 : 0;
 }
 
 #ifdef __cplusplus
