@@ -331,6 +331,8 @@ bool import_dma_buf_pieces(uint64_t lo, uint64_t hi, uint64_t piece, Pool& p) {
     return true;
 }
 
+void radv_import_headroom(uint64_t bytes);
+
 bool import_dma_buf(uint64_t lo, uint64_t hi, Pool& p) {
     static uint64_t piece = 0;
     if (dmabuf_memfd == -2) {
@@ -367,8 +369,10 @@ bool import_dma_buf(uint64_t lo, uint64_t hi, Pool& p) {
                  dev.sparse_buffers ? "are several, in a sparse buffer" : "are host-pointer imports (no sparse binding)");
     }
     if (dmabuf_memfd < 0 || (lo & 4095) || (hi & 4095)) return false;
+    if (hi - lo > piece && !dev.sparse_buffers) return false;
+    radv_import_headroom(hi - lo);
     if (hi - lo > piece) {
-        if (!dev.sparse_buffers || !import_dma_buf_pieces(lo, hi, piece, p)) return false;
+        if (!import_dma_buf_pieces(lo, hi, piece, p)) return false;
     } else {
         VkExternalMemoryBufferCreateInfo eb{VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO};
         eb.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
@@ -455,6 +459,7 @@ bool import_pool(uint64_t lo, uint64_t hi, Pool& p) {
         return true;
     }
 #endif
+    radv_import_headroom(bytes);
     // (the host allocations' memory type: the same for every pointer, asked once)
     static uint32_t type = UINT32_MAX;
     if (type == UINT32_MAX) {
@@ -4313,6 +4318,36 @@ void reap_mirrors() {   // (pools_mu held)
     }
 }
 bool system_heap_usage(uint64_t* used, uint64_t* budget);   // (vk_vma.cpp; said here too: the pressure probe below runs before imports_give_back's own forward of it)
+void radv_import_headroom(uint64_t bytes) {
+    constexpr uint64_t large_import = 64ull << 20, submit_reserve = 64ull << 20;
+    if (bytes < large_import) return;
+#if !defined(__PROSPERO__) && !defined(PS5_VULKAN)
+    if (dev.driver_id != VK_DRIVER_ID_MESA_RADV) return;
+#endif
+    std::lock_guard lk(cap_free_mu);
+    if (cap_free.empty()) return;
+    uint64_t used = 0, budget = 0;
+    if (!system_heap_usage(&used, &budget)) return;
+    const uint64_t keep = budget - std::min(budget, bytes + submit_reserve);
+    const uint64_t need = used - std::min(used, keep);
+    uint64_t released = 0;
+    for (size_t i = cap_free.size(); i > 0 && released < need;) {
+        const FreeBuf spare = cap_free[--i];
+        if (allocation_in_vram(spare.alloc)) continue;
+        cap_free.erase(cap_free.begin() + i);
+        cap_free_bytes -= spare.size;
+        destroy_buffer(spare.buffer, spare.alloc);
+        released += spare.size;
+    }
+    if (need) {
+        static unsigned logged = 0;   // (cap_free_mu)
+        if (logged++ < 16)
+            logf("vk: RADV system heap %llu of %llu MB before %llu MB import: released %llu MB of capture spares, requested %llu MB",
+                 (unsigned long long)(used >> 20), (unsigned long long)(budget >> 20),
+                 (unsigned long long)(bytes >> 20), (unsigned long long)(released >> 20),
+                 (unsigned long long)(need >> 20));
+    }
+}
 /// Whether retired imports are kept, given back at once, or given back after a wait (retired_give_back.h)
 retired_give_back::Mode retired_mode() {
     // (longshot) RX_VK_KEEP_RETIRED=1 keeps them for the session and 0, off, false or no gives them back as soon as the
