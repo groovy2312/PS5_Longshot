@@ -65,6 +65,7 @@ extern "C" int hos_ps5_commit_now(void* addr, size_t size);   // (host/ps5/win32
 #endif
 
 namespace mkwvk {
+void radv_import_headroom(uint64_t bytes);
 namespace {
 
 // Every raw imported-buffer destruction goes through here, including unpublished allocation rollback.
@@ -330,8 +331,6 @@ bool import_dma_buf_pieces(uint64_t lo, uint64_t hi, uint64_t piece, Pool& p) {
     p.pieces.assign(memories.begin() + 1, memories.end());
     return true;
 }
-
-void radv_import_headroom(uint64_t bytes);
 
 bool import_dma_buf(uint64_t lo, uint64_t hi, Pool& p) {
     static uint64_t piece = 0;
@@ -4333,7 +4332,12 @@ void radv_import_headroom(uint64_t bytes) {
     uint64_t released = 0;
     for (size_t i = cap_free.size(); i > 0 && released < need;) {
         const FreeBuf spare = cap_free[--i];
-        if (allocation_in_vram(spare.alloc)) continue;
+#if !defined(__PROSPERO__) && !defined(PS5_VULKAN)
+        VmaAllocationInfo ai{};
+        vmaGetAllocationInfo(vma_alloc, spare.alloc, &ai);
+        const VkMemoryPropertyFlags pf = dev.memory.memoryTypes[ai.memoryType].propertyFlags;
+        if ((pf & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) && !(pf & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) continue;
+#endif
         cap_free.erase(cap_free.begin() + i);
         cap_free_bytes -= spare.size;
         destroy_buffer(spare.buffer, spare.alloc);
