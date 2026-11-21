@@ -1,3 +1,4 @@
+#include "zone_boost.h"
 // Draws and dispatches: a program's pipeline layout (its stages' descriptors in Eden's order, as the SPIR-V back end
 // numbered them, one push-descriptor set when they fit), graphics pipelines (whatever Vulkan 1.3 and
 // VK_EXT_extended_dynamic_state3 take as dynamic state is dynamic; the rest is the key), each draw's descriptors
@@ -8325,8 +8326,17 @@ void draw(VkCommandBuffer cmd, NvnState& s, const DrawArgs& d) {
     }
     // (ultrawide's menu sides: the world's lighting composite was asked for, even if a skip or a pipeline not yet made leaves this
     // draw out below: the world is drawn, it is no menu. vk_framegen.cpp wide_sides)
-    if (cp->key == 0x1a7482c0ec9991eaULL) world_drawn_at.store(presents_now, std::memory_order_relaxed);
     if (cp->key == 0x02ff9920c2571cc2ULL) wheel_drawn_at.store(presents_now, std::memory_order_relaxed);
+        if (cp->key == 0x1a7482c0ec9991eaULL) {
+        const int64_t prev_world = world_drawn_at.exchange(presents_now, std::memory_order_relaxed);
+        const int64_t last_wheel = wheel_drawn_at.load(std::memory_order_relaxed);
+        if (prev_world > 0 && (presents_now - prev_world) >= 2 && (presents_now - last_wheel) > 10) {
+            zone_boost_trigger();
+        }
+    }
+    if (cp->key == 0x02ff9920c2571cc2ULL) wheel_drawn_at.store(presents_now, std::memory_order_relaxed);
+    __atomic_store_n(&g_last_draw_key, cp->key, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_last_present_seen, presents_now, std::memory_order_relaxed);
     if (skip_live(cp->key)) return;   // (EvilOOT, RX_VK_SKIP_FILE)
     {   // (longshot, RX_VK_SKIP_PROG=<key prefix,...>: draws too, their native code keys logged once; =-: none)
         // (OoT's 53509044401d78d2, by default only while its targets have no view: 128 draws, once while an area loads, that render
