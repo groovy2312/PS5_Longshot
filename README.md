@@ -69,7 +69,7 @@ This custom fork integrates upstream PS5 improvements, pending stability Pull Re
 - **Recommended PS5 Default Profile:** Automatically configures `Auto (This PS5)` with `16:9` aspect ratio, `1920x1080` native output, `TV Mode`, `AMD FSR 4` (with safe `AMD FSR 3.1` fallback), `Auto (dynamic)` internal resolution, `30%` sharpness, and `2x` frame generation via `Built-in` (`FG integrada`).
 - **Multilingual Startup Screen (`startup_i18n.h`):** Localizes shader preparation messages (`Step 1 of 2`, `Getting the game ready for your console`, time remaining, and `PS5 Longshot Plus` description) to the console or selected menu language.
 - **Builder Stability & Community PR Support:** Fixed PyQt6 `KeyError: 6` crash when entering step 6 (`Listing the game's shaders`) after packaging `PPSA99198`, added `utf-8-sig` + full traceback reporting in `pipeline.py`, and added `.github/pull_request_template.md`.
-- **Upstream & Performance Merges:** Integrates PRs `#6`, `#23`, `#32`, `#33`, `#35`, `#41`, and `#44` from `heydemoura/PS5_Longshot`, plus precompiled pipeline state databases (`#1688`, `#1615`), native `memcpy`/`memset` hooks (`#1209`), and ThinLTO TLS coherence (`#755`) from `MagicBeanDev/Longshot`.
+- **Upstream & Performance Merges:** Integrates PRs `#6`, `#23`, `#32`, `#33`, `#35`, `#41`, `#44`, `#47` (precompiled startup shaders), and `#62` (low-memory 2-3 GB Builder mode) from `heydemoura/PS5_Longshot`, plus precompiled pipeline state databases (`#1688`, `#1615`), native `memcpy`/`memset` hooks (`#1209`), and ThinLTO TLS coherence (`#755`) from `MagicBeanDev/Longshot`.
 
 ### Recommended `longshot_env.txt` Switches
 - `RX_VK_COMPILE_SHADERS=most` — Skips ~26,000 predicted pipelines on first boot for fast startup.
