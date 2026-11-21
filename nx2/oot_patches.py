@@ -35,7 +35,7 @@ Each is a runtime switch where it can be, so the game's own path stays reachable
   (host/oot_ocb_hold.h): the preload manager's update (f_832b9880) picks one of the map's neighbours each frame and a
   change cancels the one loading or loaded; a choice flickering between two (or in and out of a radius) reloaded them over
   and over with Link on one spot. Its choice goes through hos_oot_ocb_pick, which takes another neighbour only once it
-  stays the choice HOS_OCB_HOLD_MS (0: the game's own at every frame).
+  stays the choice HOS_OCB_HOLD_MS (0: the game's own at every frame). The supported build only.
 - The game's job barriers waiting for their work (host/oot_barrier.h): three parallel-for jobs (f_800998a0, f_800738e0,
   f_8007e200) sleep 20 us and look again while the masks they poll are not full; the sleep is hos_oot_barrier_wait, which
   ends when a polled word moves, and each OR into such a word wakes the waiters (hos_oot_barrier_wake). On by default;
@@ -866,7 +866,9 @@ def patch_tex_compact(s):
 
 # The neighbouring map the OptimizeChangeBank thread preloads, kept while the game's choice only flickers (host/oot_ocb_hold.h
 # has why). f_832b9880 is the preload manager's update: at 0x832b9dc8 the unit it chose is in w21 (bit 31: none) and the
-# manager in x19; from there it asks for that unit and lets the others go. The choice goes through the host first.
+# manager in x19; from there it asks for that unit and lets the others go. The choice goes through the host first. The
+# supported build's lift only (patch_file): the host reads the manager as that build lays it out, and checks the layout
+# (and the build) again in the game before each read; a mismatch there gives the game's own choice.
 OCBH_HEAD = "void f_832b9880(Ctx *__restrict A64_NOESC c) {\n"
 OCBH_LABEL = "L_832b9dc8:;\n"
 OCBH_RE = re.compile(r"L_832b9dc8:;\nif \(\(\((x21_|c->x\[21\]) >> 31\) & 1\)\) \{ goto L_832b9e0c; \}\n")
@@ -1689,7 +1691,8 @@ def patch_file(s, name, protect_hearts=False):
     if texc != out:
         lines.append("oot_patches: the texture heap's compaction asked for through the host in " + name)
     out = texc
-    ocbh, found = patch_ocb_hold(out)
+    # (the supported build's only: the host reads the manager as that build lays it out, host/oot_ocb_hold.h)
+    ocbh, found = patch_ocb_hold(out) if protect_hearts else (out, 0)
     counts["preload choice"] += found
     if ocbh != out:
         lines.append("oot_patches: the preload manager's choice of a neighbouring map through the host in " + name)
@@ -1788,7 +1791,7 @@ def report(paths, counts, protect_hearts=False):
         print("oot_patches: WARNING: the music manager's time was found %d times, not once" % total["music manager time"])
     if total["texture compaction"] != 1:   # (without it HOS_TEX_COMPACT_MS does nothing: the game compacts at every frame)
         print("oot_patches: WARNING: the texture heap's compaction request was found %d times, not once" % total["texture compaction"])
-    if total["preload choice"] != 1:   # (without it HOS_OCB_HOLD_MS does nothing: a flickering choice reloads the neighbours)
+    if protect_hearts and total["preload choice"] != 1:   # (without it HOS_OCB_HOLD_MS does nothing: the neighbours reload)
         print("oot_patches: WARNING: the preload manager's choice was found %d times, not once" % total["preload choice"])
     if total["music manager flags"] != 1:   # (without it, above 60 fps the battle music can play on after a fight)
         print("oot_patches: WARNING: the music manager's change flags were found %d times, not once" % total["music manager flags"])
