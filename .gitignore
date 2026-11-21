@@ -49,3 +49,6 @@ dist/
 .local/
 # ---- a link to <build>/compile_commands.json (nx2/build.py write_compdb), for clangd and clang-tidy ----
 /compile_commands.json
+
+.venv/
+ps5/builder/kit/
